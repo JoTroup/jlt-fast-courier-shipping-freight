@@ -166,22 +166,36 @@ class FastCourierUpdateQuotes
                 $products = $items['products'];
 
                 // getting list of all available package sizes
+
+                
                 foreach ($availablePacakges as $key => $package) {
                     $availablePacakges[$key]['height'] = $package['outside_h'];
                     $availablePacakges[$key]['width'] = $package['outside_w'];
                     $availablePacakges[$key]['length'] = $package['outside_l'];
 
+
+                    if ($package['enable_dynamic_calculations'] == 1) {
+                        $outside_w = (int) $product->get_meta('pm_width');
+                        $outside_l = (int) $product->get_meta('pm_length');
+                        $outside_h = (int) $product->get_meta('pm_height');
+                    } else {
+                        $outside_w = (int) $package['outside_w'];
+                        $outside_l = (int) $package['outside_l'];
+                        $outside_h = (int) $package['outside_h'];
+                    }
+
                     $packer->addBox(new TestBox(
                         wp_json_encode($availablePacakges[$key]),
-                        $package['outside_w'],
-                        $package['outside_l'],
-                        $package['outside_h'],
+                        $outside_w,
+                        $outside_l,
+                        $outside_h,
                         0,
-                        $package['outside_w'],
-                        $package['outside_l'],
-                        $package['outside_h'],
+                        $outside_w,
+                        $outside_l,
+                        $outside_h,
                         50000000
                     ));
+
                 }
 
                 $individualPacks = $seprated_products = [];
