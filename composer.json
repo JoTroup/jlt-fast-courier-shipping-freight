@@ -1,0 +1,13 @@
+{
+  "name": "fastcourier/fast-courier",
+  "type": "project",
+  "authors": [
+    {
+      "name": "Sunny Kumar",
+      "email": "sunny@techformation.co.in"
+    }
+  ],
+  "require": {
+    "dvdoug/boxpacker": "^3.9"
+  }
+}

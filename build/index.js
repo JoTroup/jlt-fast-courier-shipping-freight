@@ -1,0 +1,1 @@
+(()=>{const{registerCheckoutShippingMethod:e}=window.wc.blocksCheckout;e({name:"fast_courier_custom_shipping",label:"Fast Courier",content:"Shipping fee applied.",edit:()=>null,canMakeShippingMethodSelected:()=>!0})})();

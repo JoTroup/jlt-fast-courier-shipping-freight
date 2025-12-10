@@ -1,0 +1,41 @@
+<?php return array(
+    'root' => array(
+        'pretty_version' => 'dev-master',
+        'version' => 'dev-master',
+        'type' => 'project',
+        'install_path' => __DIR__ . '/../../',
+        'aliases' => array(),
+        'reference' => '94427cbf43c79d4f0743388ed4fbe81e2ade045f',
+        'name' => 'bhavneesh/fast-courier',
+        'dev' => true,
+    ),
+    'versions' => array(
+        'bhavneesh/fast-courier' => array(
+            'pretty_version' => 'dev-master',
+            'version' => 'dev-master',
+            'type' => 'project',
+            'install_path' => __DIR__ . '/../../',
+            'aliases' => array(),
+            'reference' => '94427cbf43c79d4f0743388ed4fbe81e2ade045f',
+            'dev_requirement' => false,
+        ),
+        'dvdoug/boxpacker' => array(
+            'pretty_version' => '3.9.4',
+            'version' => '3.9.4.0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../dvdoug/boxpacker',
+            'aliases' => array(),
+            'reference' => '07176158e0ebef29b701852181663ed8b429149f',
+            'dev_requirement' => false,
+        ),
+        'psr/log' => array(
+            'pretty_version' => '1.1.4',
+            'version' => '1.1.4.0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../psr/log',
+            'aliases' => array(),
+            'reference' => 'd49695b909c3b7628b6289db5479a1c204601f11',
+            'dev_requirement' => false,
+        ),
+    ),
+);
