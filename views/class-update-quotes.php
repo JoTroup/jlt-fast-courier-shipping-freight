@@ -234,6 +234,7 @@ class FastCourierUpdateQuotes
 
 
                             if ($product->get_meta('enable_dynamic_calculation') == 1) {
+                                error_log('Using dynamic calculations for product ID: ' . $productId);
                                 $height = (int) $product->get_meta('pm_height');
                                 $width = (int) $product->get_meta('pm_width');
                                 $length = (int) $product->get_meta('pm_length');
@@ -242,6 +243,7 @@ class FastCourierUpdateQuotes
                                 $pack_type = $product->get_meta('fc_package_type');
                             } else {
                                 if ($k == 0) {
+                                    error_log('Using default dimensions for product ID: ' . $productId);
                                     $height = (int) $product->get_meta('fc_height');
                                     $width = (int) $product->get_meta('fc_width');
                                     $length = (int) $product->get_meta('fc_length');
@@ -249,6 +251,7 @@ class FastCourierUpdateQuotes
                                     $is_individual = $product->get_meta('fc_is_individual');
                                     $pack_type = $product->get_meta('fc_package_type');
                                 } else {
+                                    error_log('Using custom dimensions set ' . $k . ' for product ID: ' . $productId);
                                     $height = (int) $product->get_meta('fc_height_' . $k);
                                     $width = (int) $product->get_meta('fc_width_' . $k);
                                     $length = (int) $product->get_meta('fc_length_' . $k);
