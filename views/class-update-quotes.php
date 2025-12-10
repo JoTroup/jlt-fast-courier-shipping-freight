@@ -226,6 +226,32 @@ class FastCourierUpdateQuotes
                         $eligibleForShippingFlag = $addShippingQuotesOncheckout = true;
                     }
 
+                    // Modifying Products if Calculation is True
+                    if ($product->get_meta('enable_dynamic_calculation') == 1) {
+                        error_log('Dynamic calculation enabled for product ID: ' . $productId);
+                        $dynamic_length = (int) $product->get_meta('pm_length');
+                        $dynamic_width = (int) $product->get_meta('pm_width');
+                        $dynamic_height = (int) $product->get_meta('pm_height');
+                        $dynamic_weight = $product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
+
+                        // Update product dimensions and weight
+                        $product->set_length($dynamic_length);
+                        $product->set_width($dynamic_width);
+                        $product->set_height($dynamic_height);
+                        $product->set_weight($dynamic_weight);
+
+                        $product->update_meta_data('fc_length', $dynamic_length);
+                        $product->update_meta_data('fc_width', $dynamic_width);
+                        $product->update_meta_data('fc_height', $dynamic_height);
+                        $product->update_meta_data('fc_weight', $dynamic_weight);
+
+                        error_log('Updated product ID ' . $productId . ' with Length: ' . $dynamic_length . ', Width: ' . $dynamic_width . ', Height: ' . $dynamic_height . ', Weight: ' . $dynamic_weight);
+
+                        $product->save();
+                    }
+
+
+
                     // loop for multi shipped products
                     foreach ($items['dimensions'][$productId] as $k => $value) {
 
@@ -234,7 +260,7 @@ class FastCourierUpdateQuotes
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
 
-
+                            // getting product dimensions
                             if ($product->get_meta('enable_dynamic_calculation') == 1) {
                                 error_log('Using dynamic calculations for product ID: ' . $productId);
                                 $height = (int) $product->get_meta('pm_height');
