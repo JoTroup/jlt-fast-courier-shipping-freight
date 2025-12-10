@@ -238,17 +238,23 @@ class FastCourierUpdateQuotes
                                 $width = (int) $product->get_meta('pm_width');
                                 $length = (int) $product->get_meta('pm_length');
                                 $weight = $product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
+                                $is_individual = $product->get_meta('fc_is_individual');
+                                $pack_type = $product->get_meta('fc_package_type');
                             } else {
                                 if ($k == 0) {
                                     $height = (int) $product->get_meta('fc_height');
                                     $width = (int) $product->get_meta('fc_width');
                                     $length = (int) $product->get_meta('fc_length');
                                     $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
+                                    $is_individual = $product->get_meta('fc_is_individual');
+                                    $pack_type = $product->get_meta('fc_package_type');
                                 } else {
                                     $height = (int) $product->get_meta('fc_height_' . $k);
                                     $width = (int) $product->get_meta('fc_width_' . $k);
                                     $length = (int) $product->get_meta('fc_length_' . $k);
                                     $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
+                                    $is_individual = $product->get_meta('fc_is_individual');
+                                    $pack_type = $product->get_meta('fc_package_type');
                                 }
                             }
 
