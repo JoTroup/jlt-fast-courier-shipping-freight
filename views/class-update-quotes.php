@@ -12,6 +12,8 @@ class FastCourierUpdateQuotes
     {
         global $wpdb, $fc_packages_table;
 
+        error_log('Starting quote calculation...');
+
         // getting merchant details from WP Options
         $merchantDetails = fc_merchant_details();
         if (!$merchantDetails) return;
