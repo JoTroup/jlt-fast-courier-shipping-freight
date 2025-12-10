@@ -195,7 +195,7 @@ class Fast_Courier_Shipping_Method extends WC_Shipping_Method
         }
 
 
-        $cartobject = WC()->cart;
+        $cart_object = WC()->cart;
         error_log("Modifying cart contents: {total items} " . count($cart_object->get_cart()));
         foreach ( $cart_object->get_cart() as $cart_item_key => $cart_item ) {
             // Log the entire cart item array
