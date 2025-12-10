@@ -215,20 +215,25 @@ class FastCourierUpdateQuotes
                         if ($allow_shipping == "1") {
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
-                            if ($k == 0) {
-                                $height = (int) $product->get_meta('fc_height');
-                                $width = (int) $product->get_meta('fc_width');
-                                $length = (int) $product->get_meta('fc_length');
-                                $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
-                                $is_individual = $product->get_meta('fc_is_individual');
-                                $pack_type = $product->get_meta('fc_package_type');
+
+
+                            if ($product->get_meta('enable_dynamic_calculation') == 1) {
+                                $height = (int) $product->get_meta('pm_height');
+                                $width = (int) $product->get_meta('pm_width');
+                                $length = (int) $product->get_meta('pm_length');
+                                $weight = $product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
                             } else {
-                                $height = (int) $product->get_meta('fc_height_' . $k);
-                                $width = (int) $product->get_meta('fc_width_' . $k);
-                                $length = (int) $product->get_meta('fc_length_' . $k);
-                                $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
-                                $is_individual = $product->get_meta('fc_is_individual_' . $k);
-                                $pack_type = $product->get_meta('fc_package_type_' . $k);
+                                if ($k == 0) {
+                                    $height = (int) $product->get_meta('fc_height');
+                                    $width = (int) $product->get_meta('fc_width');
+                                    $length = (int) $product->get_meta('fc_length');
+                                    $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
+                                } else {
+                                    $height = (int) $product->get_meta('fc_height_' . $k);
+                                    $width = (int) $product->get_meta('fc_width_' . $k);
+                                    $length = (int) $product->get_meta('fc_length_' . $k);
+                                    $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
+                                }
                             }
 
                             // ensure height, width and length are not zero and weight is less than 0.01
