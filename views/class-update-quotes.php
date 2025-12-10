@@ -274,11 +274,9 @@ class FastCourierUpdateQuotes
                                 }
                             }
 
-                            if ($cart_item->get_meta('enable_dynamic_calculation') == 1) {
+                            $woo_product = $cart_item['data']; // WC_Product object
+                            if ($woo_product->get_meta('enable_dynamic_calculation') == 1) {
                                 error_log('Using dynamic calculations for product ID: ' . $productId);
-
-                                $woo_product = $cart_item['data'];
-
                                 $height = (int) $woo_product->get_meta('pm_height');
                                 $width = (int) $woo_product->get_meta('pm_width');
                                 $length = (int) $woo_product->get_meta('pm_length');
