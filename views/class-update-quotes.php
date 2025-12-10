@@ -277,7 +277,7 @@ class FastCourierUpdateQuotes
                                 $height = (int) $woo_product->get_meta('pm_height');
                                 $width = (int) $woo_product->get_meta('pm_width');
                                 $length = (int) $woo_product->get_meta('pm_length');
-                                $weight = (int) $woo_product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
+                                $weight = (int) $woo_product->get_meta('pm_weight') ? round((float) $woo_product->get_meta('pm_weight'), 2) : 0;
                                 $is_individual = $product->get_meta('fc_is_individual');
                                 $pack_type = $product->get_meta('fc_package_type');
                             } else {
