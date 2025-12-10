@@ -162,6 +162,9 @@ class FastCourierUpdateQuotes
 
         foreach ($seprated_items as $eligibleForFreeShippingKey => $groupedItems) {
             // getting quotes for all same location products
+
+            $cart = WC()->cart->get_cart();
+    
             foreach ($groupedItems as $items) {
 
                 error_log('Calculating quotes for location ID: ' . $items['location']['id']);
@@ -176,7 +179,6 @@ class FastCourierUpdateQuotes
                     $availablePacakges[$key]['height'] = $package['outside_h'];
                     $availablePacakges[$key]['width'] = $package['outside_w'];
                     $availablePacakges[$key]['length'] = $package['outside_l'];
-
 
                     if ($package['enable_dynamic_calculations'] == 1) {
                         $outside_w = (int) $product->get_meta('pm_width');
@@ -261,12 +263,23 @@ class FastCourierUpdateQuotes
                             $isPhysicalProduct = true;
 
                             // getting product dimensions
-                            if ($product->get_meta('enable_dynamic_calculation') == 1) {
+
+
+                            $cart_item;
+
+                            for(each($cart as $key => $item)){
+                                if($productId == $item['product_id']){
+                                    $cart_item = $item;
+                                    break;
+                                }
+                            }
+
+                            if ($cart_item->get_meta('enable_dynamic_calculation') == 1) {
                                 error_log('Using dynamic calculations for product ID: ' . $productId);
-                                $height = (int) $product->get_meta('pm_height');
-                                $width = (int) $product->get_meta('pm_width');
-                                $length = (int) $product->get_meta('pm_length');
-                                $weight = $product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
+                                $height = (int) $cart_item->get_meta('pm_height');
+                                $width = (int) $cart_item->get_meta('pm_width');
+                                $length = (int) $cart_item->get_meta('pm_length');
+                                $weight = (int) $cart_item->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
                                 $is_individual = $product->get_meta('fc_is_individual');
                                 $pack_type = $product->get_meta('fc_package_type');
                             } else {
