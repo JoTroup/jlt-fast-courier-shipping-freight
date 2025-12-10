@@ -162,6 +162,8 @@ class FastCourierUpdateQuotes
             // getting quotes for all same location products
             foreach ($groupedItems as $items) {
 
+                error_log('Calculating quotes for location ID: ' . $items['location']['id']);
+
                 $location = $items['location'];
                 $products = $items['products'];
 
