@@ -193,6 +193,21 @@ class Fast_Courier_Shipping_Method extends WC_Shipping_Method
         if ($classicCheckoutArray['shipping_postcode'] == '' || $classicCheckoutArray['shipping_postcode'] == null) {
             return;
         }
+        // Iterate through cart items and log dimensions and weight
+        foreach (WC()->cart->get_cart() as $cart_item_key => $item) {
+            $product = $item['data'];
+
+            if ($product instanceof WC_Product) {
+            $fc_width = $product->get_width();
+            $fc_height = $product->get_height();
+            $fc_length = $product->get_length();
+            $fc_weight = $product->get_weight();
+
+            // Log the dimensions and weight
+            error_log("Product Dimensions - Width: $fc_width, Height: $fc_height, Length: $fc_length, Weight: $fc_weight");
+            }
+        }
+        
 
         $package['destination'] = array_merge($existingDestination, $classicCheckoutArray);
 
