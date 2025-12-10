@@ -214,8 +214,14 @@ class Fast_Courier_Shipping_Method extends WC_Shipping_Method
                 
                 /// just for testing to see if we can set both pm_ and fc_ meta data to get plugin to work.
                 foreach ( $cart_object->get_cart() as $cart_item_key => $cart_item ) {
+                    $cart_item['data']->set_width($calc_width);
+                    $cart_item['data']->set_height($calc_height);
+                    $cart_item['data']->set_length($calc_length);
+                    $cart_item['data']->set_weight($calc_weight);
+
                     // Overwrite fc_height meta data
                     if (isset($cart_item['data']) && is_object($cart_item['data'])) {
+                        
                         $cart_item['data']->update_meta_data('fc_height', $calc_height);
                         error_log("Overwrote fc_height for Cart Item [$cart_item_key]");
                     }
@@ -265,25 +271,6 @@ class Fast_Courier_Shipping_Method extends WC_Shipping_Method
                 error_log(" - Calculated dimensions not found in cart item.");
             }
         }
-
-
-
-
-        // Iterate through cart items and log dimensions and weight
-        foreach (WC()->cart->get_cart() as $cart_item_key => $item) {
-            $product = $item['data'];
-
-            if ($product instanceof WC_Product) {
-            $fc_width = $product->get_width();
-            $fc_height = $product->get_height();
-            $fc_length = $product->get_length();
-            $fc_weight = $product->get_weight();
-
-            // Log the dimensions and weight
-            error_log("Product Dimensions - Width: $fc_width, Height: $fc_height, Length: $fc_length, Weight: $fc_weight");
-            }
-        }
-        
 
         $package['destination'] = array_merge($existingDestination, $classicCheckoutArray);
 
