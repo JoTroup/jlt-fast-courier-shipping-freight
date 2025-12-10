@@ -229,23 +229,32 @@ class FastCourierUpdateQuotes
                     }
 
                     // Modifying Products if Calculation is True
-                    if ($product->get_meta('enable_dynamic_calculation') == 1) {
+                    $cart_item;
+                    foreach ($cart as $key => $item) {
+                        if($productId == $item['product_id']){
+                            $cart_item = $item;
+                            break;
+                        }
+                    }
+
+                    $woo_product = $cart_item['data']; // WC_Product object
+                    if ($woo_product->get_meta('enable_dynamic_calculation') == 1) {
                         error_log('Dynamic calculation enabled for product ID: ' . $productId);
-                        $dynamic_length = (int) $product->get_meta('pm_length');
-                        $dynamic_width = (int) $product->get_meta('pm_width');
-                        $dynamic_height = (int) $product->get_meta('pm_height');
-                        $dynamic_weight = $product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
+                        $dynamic_length = (int) $woo_product->get_meta('pm_length');
+                        $dynamic_width = (int) $woo_product->get_meta('pm_width');
+                        $dynamic_height = (int) $woo_product->get_meta('pm_height');
+                        $dynamic_weight = $woo_product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
 
                         // Update product dimensions and weight
-                        $product->set_length($dynamic_length);
-                        $product->set_width($dynamic_width);
-                        $product->set_height($dynamic_height);
-                        $product->set_weight($dynamic_weight);
+                        $woo_product->set_length($dynamic_length);
+                        $woo_product->set_width($dynamic_width);
+                        $woo_product->set_height($dynamic_height);
+                        $woo_product->set_weight($dynamic_weight);
 
-                        $product->update_meta_data('fc_length', $dynamic_length);
-                        $product->update_meta_data('fc_width', $dynamic_width);
-                        $product->update_meta_data('fc_height', $dynamic_height);
-                        $product->update_meta_data('fc_weight', $dynamic_weight);
+                        $woo_product->update_meta_data('fc_length', $dynamic_length);
+                        $woo_product->update_meta_data('fc_width', $dynamic_width);
+                        $woo_product->update_meta_data('fc_height', $dynamic_height);
+                        $woo_product->update_meta_data('fc_weight', $dynamic_weight);
 
                         error_log('Updated product ID ' . $productId . ' with Length: ' . $dynamic_length . ', Width: ' . $dynamic_width . ', Height: ' . $dynamic_height . ', Weight: ' . $dynamic_weight);
 
@@ -262,19 +271,7 @@ class FastCourierUpdateQuotes
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
 
-                            // getting product dimensions
-
-
-                            $cart_item;
-
-                            foreach ($cart as $key => $item) {
-                                if($productId == $item['product_id']){
-                                    $cart_item = $item;
-                                    break;
-                                }
-                            }
-
-                            $woo_product = $cart_item['data']; // WC_Product object
+                            // getting product dimension
                             if ($woo_product->get_meta('enable_dynamic_calculation') == 1) {
                                 error_log('Using dynamic calculations for product ID: ' . $productId);
                                 $height = (int) $woo_product->get_meta('pm_height');
