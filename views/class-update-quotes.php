@@ -267,7 +267,7 @@ class FastCourierUpdateQuotes
 
                             $cart_item;
 
-                            for(each($cart as $key => $item)){
+                            foreach ($cart as $key => $item) {
                                 if($productId == $item['product_id']){
                                     $cart_item = $item;
                                     break;
