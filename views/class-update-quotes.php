@@ -237,6 +237,8 @@ class FastCourierUpdateQuotes
                         }
                     }
 
+                    // JLT - Check if dynamic calculation is enabled for the product, if yes then update the product dimensions and weight with dynamic values before packing
+                    error_log('Checking dynamic calculation for product ID: ' . $cart_item);
                     $woo_product = $cart_item['data']; // WC_Product object
                     if ($woo_product->get_meta('enable_dynamic_calculation') == 1) {
                         error_log('Dynamic calculation enabled for product ID: ' . $productId);
