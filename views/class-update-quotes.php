@@ -111,6 +111,21 @@ class FastCourierUpdateQuotes
                 }
             }
 
+            // Log the product source and resolved fc_* dimension values for debugging.
+            if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                $_fc_source = (!empty($item['data']) && is_object($item['data']) && (int) $item['data']->get_id() === (int) $product_id)
+                    ? 'cart_object'
+                    : 'db_fallback';
+                $_fc_dims = array_intersect_key(
+                    array_map(function($v) { return $v[0] ?? null; }, $meta_dimensions),
+                    array_flip(['fc_length', 'fc_width', 'fc_height', 'fc_weight', 'fc_is_individual', 'fc_package_type', 'fc_allow_shipping', 'fc_allow_free_shipping'])
+                );
+                wc_get_logger()->debug(
+                    '[fc] Product loaded for quote: source=' . $_fc_source . ' product_id=' . $product_id . ' dimensions=' . wp_json_encode($_fc_dims),
+                    ['source' => 'wmsd']
+                );
+            }
+
             //getting location/tag id from product meta
             $fc_location_id = $wc_product->get_meta('fc_location');
 
@@ -248,6 +263,16 @@ class FastCourierUpdateQuotes
                             $width = ($width <= 0) ? 1 : $width;
                             $length = ($length <= 0) ? 1 : $length;
                             $weight = ($weight <= 0.1) ? 0.1 : $weight;
+
+                            if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                                wc_get_logger()->debug(
+                                    '[fc] Packing product_id=' . $productId . ' pack_index=' . $k
+                                    . ' height=' . $height . ' width=' . $width
+                                    . ' length=' . $length . ' weight=' . $weight
+                                    . ' individual=' . (int) $is_individual . ' type=' . $pack_type,
+                                    ['source' => 'wmsd']
+                                );
+                            }
 
                             $pack = ['name' => $product->get_name(), 'height' => $height, 'width' => $width, 'length' => $length, 'weight' => $weight, 'type' => $pack_type, 'quantity' => $ordered_qty];
 
