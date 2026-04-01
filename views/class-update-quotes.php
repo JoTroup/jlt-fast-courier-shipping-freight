@@ -126,18 +126,25 @@ class FastCourierUpdateQuotes
                 }
             }
 
-            // Log the product source and resolved fc_* dimension values for debugging.
+            // Log configured override keys dynamically so debug output always reflects current mapping setup.
             if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
                 $_fc_source = (!empty($item['data']) && is_object($item['data']) && (int) $item['data']->get_id() === (int) $product_id)
                     ? 'cart_object'
                     : 'db_fallback';
-                $_fc_dims = array_intersect_key(
-                    array_map(function($v) { return $v[0] ?? null; }, $meta_dimensions),
-                    array_flip(['fc_length', 'fc_width', 'fc_height', 'fc_weight', 'fc_is_individual', 'fc_package_type', 'fc_allow_shipping', 'fc_allow_free_shipping'])
-                );
                 $_wmsd_dims = !empty($wmsd_session_overrides[$product_id]) ? $wmsd_session_overrides[$product_id] : [];
+                $_resolved_meta = array_map(function($v) { return $v[0] ?? null; }, $meta_dimensions);
+                $_configured_meta = [];
+
+                foreach (array_keys($_wmsd_dims) as $_override_key) {
+                    $_configured_meta[$_override_key] = $_resolved_meta[$_override_key] ?? null;
+                }
+
                 wc_get_logger()->debug(
-                    '[fc] Product loaded for quote: source=' . $_fc_source . ' product_id=' . $product_id . ' wmsd_overrides=' . wp_json_encode($_wmsd_dims) . ' dimensions=' . wp_json_encode($_fc_dims),
+                    '[fc] Product loaded for quote: source=' . $_fc_source
+                    . ' product_id=' . $product_id
+                    . ' configured_override_keys=' . wp_json_encode(array_keys($_wmsd_dims))
+                    . ' wmsd_overrides=' . wp_json_encode($_wmsd_dims)
+                    . ' resolved_configured_meta=' . wp_json_encode($_configured_meta),
                     ['source' => 'wmsd']
                 );
             }
