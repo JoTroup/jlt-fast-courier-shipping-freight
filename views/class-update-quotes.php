@@ -345,6 +345,15 @@ class FastCourierUpdateQuotes
                 $formData = Self::qouteDataFormatter($customerData, $location, $individualPacks);
                 if (!$formData) return false;
 
+                if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                    wc_get_logger()->debug(
+                        '[fc] Quote payload prepared location_id=' . ($location['id'] ?? 'n/a')
+                        . ' destination_postcode=' . ($formData['destinationPostcode'] ?? 'n/a')
+                        . ' packages=' . wp_json_encode(Self::formatPackages($individualPacks)),
+                        ['source' => 'wmsd']
+                    );
+                }
+
                 $formData['isDropOffTailLift'] = 0;
                 if (isset($merchantDetails['isDropOffTailLift']) && (isset($merchantDetails['tailLiftValue']) && $totalProductsWeight >= (float) $merchantDetails['tailLiftValue'])) {
                     $formData['isDropOffTailLift'] = 1;
@@ -361,6 +370,13 @@ class FastCourierUpdateQuotes
 
                 if ($isAllowShipping && $eligibleForShippingFlag) {
                     if ($location['is_flat_enable'] == 1 && isPostCodeIncludedInFlatRate($formData['destinationPostcode'], $location['flat_shipping_postcodes'])) {
+                        if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                            wc_get_logger()->debug(
+                                '[fc] Quote path=flat_rate flat_price=' . $location['flat_rate'],
+                                ['source' => 'wmsd']
+                            );
+                        }
+
                         $formData['subOrderType'] = 'flat_rate';
                         $formData['flatPrice'] = $location['flat_rate'];
 
@@ -371,11 +387,18 @@ class FastCourierUpdateQuotes
                             $response['data']['order_type'] = ORDER_TYPE_FLATRATE;
                         }
                     } else {
+                        if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                            wc_get_logger()->debug('[fc] Quote path=live_quote endpoint=quote', ['source' => 'wmsd']);
+                        }
 
                         $response = FastCourierRequests::httpGet('quote', $formData);
                     }
 
                     if ($response['status'] == 400) {
+                        if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                            wc_get_logger()->debug('[fc] Quote path=fallback endpoint=create-fallback-order', ['source' => 'wmsd']);
+                        }
+
                         $formData['subOrderType'] = ORDER_TYPE_FALLBACK;
                         $formData['fallbackPrice'] = $merchantDetails['fallbackAmount'];
 
@@ -425,6 +448,17 @@ class FastCourierUpdateQuotes
                 $response['data']['packages'] = $individualPacks;
                 $response['data']['shipping_type'] = $shippingStatus;
                 $response['data']['destination'] = $destinationData;
+
+                if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
+                    $final_price = $response['data']['data']['priceIncludingGst'] ?? ($response['data']['priceIncludingGst'] ?? 'n/a');
+                    wc_get_logger()->debug(
+                        '[fc] Final quote result shipping_type=' . ($response['data']['shipping_type'] ?? 'n/a')
+                        . ' order_type=' . ($response['data']['order_type'] ?? 'n/a')
+                        . ' priceIncludingGst=' . $final_price,
+                        ['source' => 'wmsd']
+                    );
+                }
+
                 $body[] = $response['data'];
                 $allPackages[] = $individualPacks;
             }
