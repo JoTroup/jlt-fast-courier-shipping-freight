@@ -3,7 +3,7 @@ Contributors: fastcourieraustralia
 Tags: freight, woocommerce, courier, fastcourier, shipping
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 5.2.0
+Stable tag: 5.2.2
 Requires PHP: 7.4
 License: GPLv2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -308,4 +308,11 @@ This plugin will return fastest and the cheapest quote based of destination and 
 * Performance & Bug fixes
 
 = 5.2.0 =
+* Performance & Bug fixes
+
+= 5.2.1 =
+* Performance & Bug fixes
+
+= 5.2.2 =
+* Compatibility added for WooCommerce network activated
 * Performance & Bug fixes

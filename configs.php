@@ -15,7 +15,7 @@ $GLOBALS['api_origin'] = "https://portal-staging.fastcourier.com.au/";
 $GLOBALS['prod_api'] = "https://portal.fastcourier.com.au/api/wp/";
 $GLOBALS['api'] = "https://portal-staging.fastcourier.com.au/api/wp/";
 $GLOBALS['test_key'] = $options_prefix . 'test_mode';
-$GLOBALS['version'] = '5.2.0';
+$GLOBALS['version'] = '5.2.2';
 
 $GLOBALS['options_prefix'] = $options_prefix;
 $GLOBALS['fc_woo_field'] = "_product_fc_packages";

@@ -12,8 +12,6 @@ class FastCourierUpdateQuotes
     {
         global $wpdb, $fc_packages_table;
 
-        error_log('Starting quote calculation...');
-
         // getting merchant details from WP Options
         $merchantDetails = fc_merchant_details();
         if (!$merchantDetails) return;
@@ -52,24 +50,36 @@ class FastCourierUpdateQuotes
         }
 
         /*
-        * $seprated_items will contains an array of products based on there locations
-        * array key will be the primary key (id) of location and value will be WC_Product.
-        */
+         * $seprated_items will contains an array of products based on there locations
+         * array key will be the primary key (id) of location and value will be WC_Product.
+         */
         $seprated_items = [];
 
         foreach ($cartItems as $item) {
 
             if (isset($item['variation_id']) && $item['variation_id'] > 0) {
                 $product_id = $item['variation_id'];
-                $wc_product = wc_get_product($product_id);
+                $wc_product = (!empty($item['data']) && is_object($item['data']) && (int) $item['data']->get_id() === (int) $product_id)
+                    ? $item['data']
+                    : wc_get_product($product_id);
             } else {
                 $product_id = $item['product_id'];
-                $wc_product = new \WC_Product($product_id);
+                $wc_product = (!empty($item['data']) && is_object($item['data']))
+                    ? $item['data']
+                    : new \WC_Product($product_id);
             }
 
             // check if product is virtual in WP
             $isVirtualProduct = $wc_product->is_virtual();
-            $meta_dimensions = get_post_meta($product_id);
+            // Build meta_dimensions from the in-memory product object so any
+            // cart-time overrides (e.g. from wmsd) are reflected instead of raw DB values.
+            $meta_dimensions = [];
+            foreach ($wc_product->get_meta_data() as $_meta) {
+                $_d = $_meta->get_data();
+                if (isset($_d['key']) && '' !== $_d['key']) {
+                    $meta_dimensions[$_d['key']][] = $_d['value'];
+                }
+            }
             $eligibleForShipping = "1";
             if ($isVirtualProduct) {
                 $allow_shipping = "0";
@@ -162,46 +172,28 @@ class FastCourierUpdateQuotes
 
         foreach ($seprated_items as $eligibleForFreeShippingKey => $groupedItems) {
             // getting quotes for all same location products
-
-            $cart = WC()->cart->get_cart();
-    
             foreach ($groupedItems as $items) {
-
-                error_log('Calculating quotes for location ID: ' . $items['location']['id']);
 
                 $location = $items['location'];
                 $products = $items['products'];
 
                 // getting list of all available package sizes
-
-                
                 foreach ($availablePacakges as $key => $package) {
                     $availablePacakges[$key]['height'] = $package['outside_h'];
                     $availablePacakges[$key]['width'] = $package['outside_w'];
                     $availablePacakges[$key]['length'] = $package['outside_l'];
 
-                    if ($package['enable_dynamic_calculations'] == 1) {
-                        $outside_w = (int) $product->get_meta('pm_width');
-                        $outside_l = (int) $product->get_meta('pm_length');
-                        $outside_h = (int) $product->get_meta('pm_height');
-                    } else {
-                        $outside_w = (int) $package['outside_w'];
-                        $outside_l = (int) $package['outside_l'];
-                        $outside_h = (int) $package['outside_h'];
-                    }
-
                     $packer->addBox(new TestBox(
                         wp_json_encode($availablePacakges[$key]),
-                        $outside_w,
-                        $outside_l,
-                        $outside_h,
+                        $package['outside_w'],
+                        $package['outside_l'],
+                        $package['outside_h'],
                         0,
-                        $outside_w,
-                        $outside_l,
-                        $outside_h,
+                        $package['outside_w'],
+                        $package['outside_l'],
+                        $package['outside_h'],
                         50000000
                     ));
-
                 }
 
                 $individualPacks = $seprated_products = [];
@@ -228,43 +220,6 @@ class FastCourierUpdateQuotes
                         $eligibleForShippingFlag = $addShippingQuotesOncheckout = true;
                     }
 
-                    // Modifying Products if Calculation is True
-                    $cart_item;
-                    foreach ($cart as $key => $item) {
-                        if($productId == $item['product_id']){
-                            $cart_item = $item;
-                            break;
-                        }
-                    }
-
-                    // JLT - Check if dynamic calculation is enabled for the product, if yes then update the product dimensions and weight with dynamic values before packing
-                    error_log('Checking dynamic calculation for product ID: ' . $cart_item);
-                    $woo_product = $cart_item['data']; // WC_Product object
-                    if ($woo_product->get_meta('enable_dynamic_calculation') == 1) {
-                        error_log('Dynamic calculation enabled for product ID: ' . $productId);
-                        $dynamic_length = (int) $woo_product->get_meta('pm_length');
-                        $dynamic_width = (int) $woo_product->get_meta('pm_width');
-                        $dynamic_height = (int) $woo_product->get_meta('pm_height');
-                        $dynamic_weight = $woo_product->get_meta('pm_weight') ? round((float) $product->get_meta('pm_weight'), 2) : 0;
-
-                        // Update product dimensions and weight
-                        $woo_product->set_length($dynamic_length);
-                        $woo_product->set_width($dynamic_width);
-                        $woo_product->set_height($dynamic_height);
-                        $woo_product->set_weight($dynamic_weight);
-
-                        $woo_product->update_meta_data('fc_length', $dynamic_length);
-                        $woo_product->update_meta_data('fc_width', $dynamic_width);
-                        $woo_product->update_meta_data('fc_height', $dynamic_height);
-                        $woo_product->update_meta_data('fc_weight', $dynamic_weight);
-
-                        error_log('Updated product ID ' . $productId . ' with Length: ' . $dynamic_length . ', Width: ' . $dynamic_width . ', Height: ' . $dynamic_height . ', Weight: ' . $dynamic_weight);
-
-                        $product->save();
-                    }
-
-
-
                     // loop for multi shipped products
                     foreach ($items['dimensions'][$productId] as $k => $value) {
 
@@ -272,34 +227,20 @@ class FastCourierUpdateQuotes
                         if ($allow_shipping == "1") {
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
-
-                            // getting product dimension
-                            if ($woo_product->get_meta('enable_dynamic_calculation') == 1) {
-                                error_log('Using dynamic calculations for product ID: ' . $productId);
-                                $height = (int) $woo_product->get_meta('pm_height');
-                                $width = (int) $woo_product->get_meta('pm_width');
-                                $length = (int) $woo_product->get_meta('pm_length');
-                                $weight = (int) $woo_product->get_meta('pm_weight') ? round((float) $woo_product->get_meta('pm_weight'), 2) : 0;
+                            if ($k == 0) {
+                                $height = (int) $product->get_meta('fc_height');
+                                $width = (int) $product->get_meta('fc_width');
+                                $length = (int) $product->get_meta('fc_length');
+                                $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
                                 $is_individual = $product->get_meta('fc_is_individual');
                                 $pack_type = $product->get_meta('fc_package_type');
                             } else {
-                                if ($k == 0) {
-                                    error_log('Using default dimensions for product ID: ' . $productId);
-                                    $height = (int) $product->get_meta('fc_height');
-                                    $width = (int) $product->get_meta('fc_width');
-                                    $length = (int) $product->get_meta('fc_length');
-                                    $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
-                                    $is_individual = $product->get_meta('fc_is_individual');
-                                    $pack_type = $product->get_meta('fc_package_type');
-                                } else {
-                                    error_log('Using custom dimensions set ' . $k . ' for product ID: ' . $productId);
-                                    $height = (int) $product->get_meta('fc_height_' . $k);
-                                    $width = (int) $product->get_meta('fc_width_' . $k);
-                                    $length = (int) $product->get_meta('fc_length_' . $k);
-                                    $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
-                                    $is_individual = $product->get_meta('fc_is_individual');
-                                    $pack_type = $product->get_meta('fc_package_type');
-                                }
+                                $height = (int) $product->get_meta('fc_height_' . $k);
+                                $width = (int) $product->get_meta('fc_width_' . $k);
+                                $length = (int) $product->get_meta('fc_length_' . $k);
+                                $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
+                                $is_individual = $product->get_meta('fc_is_individual_' . $k);
+                                $pack_type = $product->get_meta('fc_package_type_' . $k);
                             }
 
                             // ensure height, width and length are not zero and weight is less than 0.01
@@ -541,6 +482,21 @@ class FastCourierUpdateQuotes
                 $companyName = $address['shipping_company'] == '' ? 'NA' : $address['shipping_company'];
                 $address1 = ($address['shipping_address_1'] != '') ? $address['shipping_address_1'] : null;
                 $address2 = $address['shipping_address_2'] ?? null;
+                if (!$dCity || $dCity == '') {
+                    $parts = explode(',', $address['fc_shipping_suburb']);
+                    $city = trim($parts[0]);
+                    $dCity = $city;
+                }
+                if (!$state || $state == '') {
+                    if (preg_match('/\(([^)]+)\)/', $address['fc_shipping_suburb'], $m)) {
+                        $state = trim($m[1]);
+                    }
+                }
+                if ((!$postcode || $postcode == '') && $address['fc_shipping_suburb'] != '') {
+                    if (preg_match('/\b(\d{4})\b/', $address['fc_shipping_suburb'], $m)) {
+                        $postcode = $m[1];
+                    }
+                }
             } else {
                 $postcode = $address['billing_postcode'];
                 $state = $address['billing_state'];
@@ -551,6 +507,22 @@ class FastCourierUpdateQuotes
                 $companyName = $address['billing_company'] == '' ? 'NA' : $address['billing_company'];
                 $address1 = ($address['billing_address_1'] != '') ? $address['billing_address_1'] : null;
                 $address2 = $address['billing_address_2'] ?? null;
+
+                if ((!$dCity || $dCity == '') && $address['fc_billing_suburb'] != '') {
+                    $parts = explode(',', $address['fc_billing_suburb']);
+                    $city = trim($parts[0]);
+                    $dCity = $city;
+                }
+                if ((!$state || $state == '') && $address['fc_billing_suburb'] != '') {
+                    if (preg_match('/\(([^)]+)\)/', $address['fc_billing_suburb'], $m)) {
+                        $state = trim($m[1]);
+                    }
+                }
+                if ((!$postcode || $postcode == '') && $address['fc_billing_suburb'] != '') {
+                    if (preg_match('/\b(\d{4})\b/', $address['fc_billing_suburb'], $m)) {
+                        $postcode = $m[1];
+                    }
+                }
             }
             $email = $address['billing_email'];
             $phone = $address['billing_phone'];

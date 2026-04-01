@@ -5,7 +5,7 @@
                 <img src="<?php echo esc_url(plugins_url('images/fast-courier-dark.png', __DIR__)) ?>" alt="">
             </div>
             <?php
-            if (!fc_check_is_woocommerce_active()) { ?>
+            if (!fc_is_woocommerce_active()) { ?>
                 <div class="w-lg-500px bg-body rounded shadow-sm p-5 mx-auto login-form">
                     <p>You're gonna need WooCommerce to run this plugin!</p>
                 </div>

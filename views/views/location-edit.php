@@ -241,7 +241,7 @@ global $token;
                 dataType: 'json',
                 headers: {
                     'Authorization': `Bearer <?php echo $token ?>`,
-                    'version': '5.2.0',
+                    'version': '5.2.2',
                 },
                 data: (params) => {
                     var query = {

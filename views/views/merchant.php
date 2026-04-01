@@ -396,7 +396,7 @@ $portal_url = is_test_mode_active() ? $GLOBALS['api_origin'] : $GLOBALS['prod_ap
             dataType: 'json',
             headers: {
                 'Authorization': `Bearer <?php echo $token ?>`,
-                'version': '5.2.0',
+                'version': '5.2.2',
             },
             data: {
                 q: 'term', // Query parameter

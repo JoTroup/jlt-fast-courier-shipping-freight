@@ -16,7 +16,7 @@ use FastCourier\Menu;
  * Plugin Name:       Fast Courier - Shipping & Freight
  * Plugin URI:        https://fastcourier.com.au
  * Description:       Fast Courier is an Australian Courier & Freight shipping platform. Connect your WooCommerce Store with a network of Courier & Freight Providers. See more about Fast Courier Services here: <a href="https://fastcourier.com.au" target="_blank">https://fastcourier.com.au</a>
- * Version:           5.2.0
+ * Version:           5.2.2
  * Author:            Fast Courier Australia
  * License:           GPLv2
  */
@@ -26,12 +26,49 @@ if (!defined('WPINC')) {
     die;
 }
 
+// Check if WooCommerce is active
+if (!function_exists('fc_is_woocommerce_active')) {
+    function fc_is_woocommerce_active()
+    {
+        // 1. Most reliable: check if WooCommerce is loaded
+        if (class_exists('WooCommerce')) {
+            return true;
+        }
+
+        // 2. Fallback: check plugin activation status
+        if (!function_exists('is_plugin_active')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        // Single site activation
+        if (is_plugin_active('woocommerce/woocommerce.php')) {
+            return true;
+        }
+
+        // Multisite network activation
+        if (is_multisite() && is_plugin_active_for_network('woocommerce/woocommerce.php')) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
 if (!function_exists('fc_check_version_compatibility')) {
     function fc_check_version_compatibility()
     {
-        // Check if WooCommerce is active
-        if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
-            wp_die(__('Unfortunately, you are unable to install this plugin as WooCommerce is not currently installed.', 'fast-courier'));
+        if (!fc_is_woocommerce_active()) {
+
+            // Deactivate plugin instead of killing execution
+            deactivate_plugins(plugin_basename(__FILE__));
+
+            wp_die(
+                esc_html__('Unfortunately, you are unable to install this plugin as WooCommerce is not currently installed.', 'fast-courier'),
+                esc_html__('Plugin dependency check', 'fast-courier'),
+                [
+                    'back_link' => true,
+                ]
+            );
         }
     }
 
@@ -152,21 +189,6 @@ if (!function_exists('enqueue_select2')) {
                 wp_enqueue_script('fast-courier-admin-select2', plugins_url("/views/libs/select2/js/select2.min.js", __FILE__));
             }
         }
-    }
-}
-
-
-if (!function_exists('fc_check_is_woocommerce_active')) {
-    /**
-     * Check if Woo is active
-     */
-    function fc_check_is_woocommerce_active()
-    {
-        $isWoocommerceActivated = false;
-        if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
-            $isWoocommerceActivated = true;
-        }
-        return $isWoocommerceActivated;
     }
 }
 

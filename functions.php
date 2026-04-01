@@ -1223,7 +1223,7 @@ if (!function_exists('fc_add_jscript_checkout')) {
                             dataType: 'json',
                             headers: {
                                 'Authorization': `Bearer <?php echo $token ?>`,
-                                'version': '5.2.0',
+                                'version': '5.2.2',
                             },
                             data: {
                                 q: 'term', // Query parameter
