@@ -80,6 +80,21 @@ class FastCourierUpdateQuotes
                     $meta_dimensions[$_d['key']][] = $_d['value'];
                 }
             }
+
+            // Apply mapped overrides persisted by the WMSD plugin for this request.
+            $wmsd_session_overrides = [];
+            if (function_exists('WC') && WC()->session) {
+                $wmsd_session_overrides = WC()->session->get('wmsd_meta_overrides', []);
+            }
+            if (!empty($wmsd_session_overrides[$product_id]) && is_array($wmsd_session_overrides[$product_id])) {
+                foreach ($wmsd_session_overrides[$product_id] as $override_key => $override_value) {
+                    $meta_dimensions[$override_key] = [strval($override_value)];
+                    $wc_product->update_meta_data($override_key, $override_value);
+                }
+                if (method_exists($wc_product, 'get_changes') && method_exists($wc_product, 'apply_changes') && !empty($wc_product->get_changes())) {
+                    $wc_product->apply_changes();
+                }
+            }
             $eligibleForShipping = "1";
             if ($isVirtualProduct) {
                 $allow_shipping = "0";
@@ -120,8 +135,9 @@ class FastCourierUpdateQuotes
                     array_map(function($v) { return $v[0] ?? null; }, $meta_dimensions),
                     array_flip(['fc_length', 'fc_width', 'fc_height', 'fc_weight', 'fc_is_individual', 'fc_package_type', 'fc_allow_shipping', 'fc_allow_free_shipping'])
                 );
+                $_wmsd_dims = !empty($wmsd_session_overrides[$product_id]) ? $wmsd_session_overrides[$product_id] : [];
                 wc_get_logger()->debug(
-                    '[fc] Product loaded for quote: source=' . $_fc_source . ' product_id=' . $product_id . ' dimensions=' . wp_json_encode($_fc_dims),
+                    '[fc] Product loaded for quote: source=' . $_fc_source . ' product_id=' . $product_id . ' wmsd_overrides=' . wp_json_encode($_wmsd_dims) . ' dimensions=' . wp_json_encode($_fc_dims),
                     ['source' => 'wmsd']
                 );
             }
@@ -243,19 +259,26 @@ class FastCourierUpdateQuotes
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
                             if ($k == 0) {
-                                $height = (int) $product->get_meta('fc_height');
-                                $width = (int) $product->get_meta('fc_width');
-                                $length = (int) $product->get_meta('fc_length');
-                                $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
-                                $is_individual = $product->get_meta('fc_is_individual');
-                                $pack_type = $product->get_meta('fc_package_type');
+                                $height = isset($value['fc_height']) ? (int) $value['fc_height'] : (int) $product->get_meta('fc_height');
+                                $width = isset($value['fc_width']) ? (int) $value['fc_width'] : (int) $product->get_meta('fc_width');
+                                $length = isset($value['fc_length']) ? (int) $value['fc_length'] : (int) $product->get_meta('fc_length');
+                                $weight = isset($value['fc_weight']) ? round((float) $value['fc_weight'], 2) : ($product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0);
+                                $is_individual = isset($value['fc_is_individual']) ? $value['fc_is_individual'] : $product->get_meta('fc_is_individual');
+                                $pack_type = isset($value['fc_package_type']) ? $value['fc_package_type'] : $product->get_meta('fc_package_type');
                             } else {
-                                $height = (int) $product->get_meta('fc_height_' . $k);
-                                $width = (int) $product->get_meta('fc_width_' . $k);
-                                $length = (int) $product->get_meta('fc_length_' . $k);
-                                $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
-                                $is_individual = $product->get_meta('fc_is_individual_' . $k);
-                                $pack_type = $product->get_meta('fc_package_type_' . $k);
+                                $height_key = 'fc_height_' . $k;
+                                $width_key = 'fc_width_' . $k;
+                                $length_key = 'fc_length_' . $k;
+                                $weight_key = 'fc_weight_' . $k;
+                                $individual_key = 'fc_is_individual_' . $k;
+                                $pack_type_key = 'fc_package_type_' . $k;
+
+                                $height = isset($value[$height_key]) ? (int) $value[$height_key] : (int) $product->get_meta($height_key);
+                                $width = isset($value[$width_key]) ? (int) $value[$width_key] : (int) $product->get_meta($width_key);
+                                $length = isset($value[$length_key]) ? (int) $value[$length_key] : (int) $product->get_meta($length_key);
+                                $weight = isset($value[$weight_key]) ? round((float) $value[$weight_key], 2) : ($product->get_meta($weight_key) ? round((float) $product->get_meta($weight_key), 2) : 0);
+                                $is_individual = isset($value[$individual_key]) ? $value[$individual_key] : $product->get_meta($individual_key);
+                                $pack_type = isset($value[$pack_type_key]) ? $value[$pack_type_key] : $product->get_meta($pack_type_key);
                             }
 
                             // ensure height, width and length are not zero and weight is less than 0.01
