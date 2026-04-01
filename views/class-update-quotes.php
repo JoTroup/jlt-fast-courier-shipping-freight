@@ -314,10 +314,11 @@ class FastCourierUpdateQuotes
                             'cost' => $product->get_price(),
                             'quantity' => $ordered_qty,
                             'tax' => $product->get_tax_class() ?? 0,
-                            'weight' => $product->get_weight(),
-                            'length' => $product->get_length(),
-                            'width' => $product->get_width(),
-                            'height' => $product->get_height(),
+                            // Keep item summary aligned with the dimensions used for quote packing.
+                            'weight' => $weight,
+                            'length' => $length,
+                            'width' => $width,
+                            'height' => $height,
                             'shipping' => !in_array($product->get_type(), array('virtual', 'downloadable')),
                             'total' => $product->get_price() * $ordered_qty,
                         ];
