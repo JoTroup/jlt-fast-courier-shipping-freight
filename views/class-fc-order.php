@@ -739,7 +739,7 @@ class FastCourierOrders
             );
 
             // Check FastCourierRequests::httpGet response structure
-            $response = FastCourierRequests::httpGet('run-order-synicing-cron');
+            $response = FastCourierRequests::httpGet('run-order-syncing-cron');
 
             if (isset($response['status']) && $response['status'] == 200) {
                 echo json_encode(['success' => true, 'message' => 'Order Syncing Finished.']);

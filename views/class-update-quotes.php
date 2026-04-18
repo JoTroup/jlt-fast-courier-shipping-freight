@@ -59,42 +59,15 @@ class FastCourierUpdateQuotes
 
             if (isset($item['variation_id']) && $item['variation_id'] > 0) {
                 $product_id = $item['variation_id'];
-                $wc_product = (!empty($item['data']) && is_object($item['data']) && (int) $item['data']->get_id() === (int) $product_id)
-                    ? $item['data']
-                    : wc_get_product($product_id);
+                $wc_product = wc_get_product($product_id);
             } else {
                 $product_id = $item['product_id'];
-                $wc_product = (!empty($item['data']) && is_object($item['data']))
-                    ? $item['data']
-                    : new \WC_Product($product_id);
+                $wc_product = new \WC_Product($product_id);
             }
 
             // check if product is virtual in WP
             $isVirtualProduct = $wc_product->is_virtual();
-            // Build meta_dimensions from the in-memory product object so any
-            // cart-time overrides (e.g. from wmsd) are reflected instead of raw DB values.
-            $meta_dimensions = [];
-            foreach ($wc_product->get_meta_data() as $_meta) {
-                $_d = $_meta->get_data();
-                if (isset($_d['key']) && '' !== $_d['key']) {
-                    $meta_dimensions[$_d['key']][] = $_d['value'];
-                }
-            }
-
-            // Apply mapped overrides persisted by the WMSD plugin for this request.
-            $wmsd_session_overrides = [];
-            if (function_exists('WC') && WC()->session) {
-                $wmsd_session_overrides = WC()->session->get('wmsd_meta_overrides', []);
-            }
-            if (!empty($wmsd_session_overrides[$product_id]) && is_array($wmsd_session_overrides[$product_id])) {
-                foreach ($wmsd_session_overrides[$product_id] as $override_key => $override_value) {
-                    $meta_dimensions[$override_key] = [strval($override_value)];
-                    $wc_product->update_meta_data($override_key, $override_value);
-                }
-                if (method_exists($wc_product, 'get_changes') && method_exists($wc_product, 'apply_changes') && !empty($wc_product->get_changes())) {
-                    $wc_product->apply_changes();
-                }
-            }
+            $meta_dimensions = get_post_meta($product_id);
             $eligibleForShipping = "1";
             if ($isVirtualProduct) {
                 $allow_shipping = "0";
@@ -124,29 +97,6 @@ class FastCourierUpdateQuotes
                         $dimensionsData[$index][$key] = $value[0];
                     }
                 }
-            }
-
-            // Log configured override keys dynamically so debug output always reflects current mapping setup.
-            if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                $_fc_source = (!empty($item['data']) && is_object($item['data']) && (int) $item['data']->get_id() === (int) $product_id)
-                    ? 'cart_object'
-                    : 'db_fallback';
-                $_wmsd_dims = !empty($wmsd_session_overrides[$product_id]) ? $wmsd_session_overrides[$product_id] : [];
-                $_resolved_meta = array_map(function($v) { return $v[0] ?? null; }, $meta_dimensions);
-                $_configured_meta = [];
-
-                foreach (array_keys($_wmsd_dims) as $_override_key) {
-                    $_configured_meta[$_override_key] = $_resolved_meta[$_override_key] ?? null;
-                }
-
-                wc_get_logger()->debug(
-                    '[fc] Product loaded for quote: source=' . $_fc_source
-                    . ' product_id=' . $product_id
-                    . ' configured_override_keys=' . wp_json_encode(array_keys($_wmsd_dims))
-                    . ' wmsd_overrides=' . wp_json_encode($_wmsd_dims)
-                    . ' resolved_configured_meta=' . wp_json_encode($_configured_meta),
-                    ['source' => 'wmsd']
-                );
             }
 
             //getting location/tag id from product meta
@@ -266,26 +216,19 @@ class FastCourierUpdateQuotes
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
                             if ($k == 0) {
-                                $height = isset($value['fc_height']) ? (int) $value['fc_height'] : (int) $product->get_meta('fc_height');
-                                $width = isset($value['fc_width']) ? (int) $value['fc_width'] : (int) $product->get_meta('fc_width');
-                                $length = isset($value['fc_length']) ? (int) $value['fc_length'] : (int) $product->get_meta('fc_length');
-                                $weight = isset($value['fc_weight']) ? round((float) $value['fc_weight'], 2) : ($product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0);
-                                $is_individual = isset($value['fc_is_individual']) ? $value['fc_is_individual'] : $product->get_meta('fc_is_individual');
-                                $pack_type = isset($value['fc_package_type']) ? $value['fc_package_type'] : $product->get_meta('fc_package_type');
+                                $height = (int) $product->get_meta('fc_height');
+                                $width = (int) $product->get_meta('fc_width');
+                                $length = (int) $product->get_meta('fc_length');
+                                $weight = $product->get_meta('fc_weight') ? round((float) $product->get_meta('fc_weight'), 2) : 0;
+                                $is_individual = $product->get_meta('fc_is_individual');
+                                $pack_type = $product->get_meta('fc_package_type');
                             } else {
-                                $height_key = 'fc_height_' . $k;
-                                $width_key = 'fc_width_' . $k;
-                                $length_key = 'fc_length_' . $k;
-                                $weight_key = 'fc_weight_' . $k;
-                                $individual_key = 'fc_is_individual_' . $k;
-                                $pack_type_key = 'fc_package_type_' . $k;
-
-                                $height = isset($value[$height_key]) ? (int) $value[$height_key] : (int) $product->get_meta($height_key);
-                                $width = isset($value[$width_key]) ? (int) $value[$width_key] : (int) $product->get_meta($width_key);
-                                $length = isset($value[$length_key]) ? (int) $value[$length_key] : (int) $product->get_meta($length_key);
-                                $weight = isset($value[$weight_key]) ? round((float) $value[$weight_key], 2) : ($product->get_meta($weight_key) ? round((float) $product->get_meta($weight_key), 2) : 0);
-                                $is_individual = isset($value[$individual_key]) ? $value[$individual_key] : $product->get_meta($individual_key);
-                                $pack_type = isset($value[$pack_type_key]) ? $value[$pack_type_key] : $product->get_meta($pack_type_key);
+                                $height = (int) $product->get_meta('fc_height_' . $k);
+                                $width = (int) $product->get_meta('fc_width_' . $k);
+                                $length = (int) $product->get_meta('fc_length_' . $k);
+                                $weight = $product->get_meta('fc_weight_' . $k) ? round((float) $product->get_meta('fc_weight_' . $k), 2) : 0;
+                                $is_individual = $product->get_meta('fc_is_individual_' . $k);
+                                $pack_type = $product->get_meta('fc_package_type_' . $k);
                             }
 
                             // ensure height, width and length are not zero and weight is less than 0.01
@@ -293,16 +236,6 @@ class FastCourierUpdateQuotes
                             $width = ($width <= 0) ? 1 : $width;
                             $length = ($length <= 0) ? 1 : $length;
                             $weight = ($weight <= 0.1) ? 0.1 : $weight;
-
-                            if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                                wc_get_logger()->debug(
-                                    '[fc] Packing product_id=' . $productId . ' pack_index=' . $k
-                                    . ' height=' . $height . ' width=' . $width
-                                    . ' length=' . $length . ' weight=' . $weight
-                                    . ' individual=' . (int) $is_individual . ' type=' . $pack_type,
-                                    ['source' => 'wmsd']
-                                );
-                            }
 
                             $pack = ['name' => $product->get_name(), 'height' => $height, 'width' => $width, 'length' => $length, 'weight' => $weight, 'type' => $pack_type, 'quantity' => $ordered_qty];
 
@@ -321,11 +254,10 @@ class FastCourierUpdateQuotes
                             'cost' => $product->get_price(),
                             'quantity' => $ordered_qty,
                             'tax' => $product->get_tax_class() ?? 0,
-                            // Keep item summary aligned with the dimensions used for quote packing.
-                            'weight' => $weight,
-                            'length' => $length,
-                            'width' => $width,
-                            'height' => $height,
+                            'weight' => $product->get_weight(),
+                            'length' => $product->get_length(),
+                            'width' => $product->get_width(),
+                            'height' => $product->get_height(),
                             'shipping' => !in_array($product->get_type(), array('virtual', 'downloadable')),
                             'total' => $product->get_price() * $ordered_qty,
                         ];
@@ -353,15 +285,6 @@ class FastCourierUpdateQuotes
                 $formData = Self::qouteDataFormatter($customerData, $location, $individualPacks);
                 if (!$formData) return false;
 
-                if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                    wc_get_logger()->debug(
-                        '[fc] Quote payload prepared location_id=' . ($location['id'] ?? 'n/a')
-                        . ' destination_postcode=' . ($formData['destinationPostcode'] ?? 'n/a')
-                        . ' packages=' . wp_json_encode(Self::formatPackages($individualPacks)),
-                        ['source' => 'wmsd']
-                    );
-                }
-
                 $formData['isDropOffTailLift'] = 0;
                 if (isset($merchantDetails['isDropOffTailLift']) && (isset($merchantDetails['tailLiftValue']) && $totalProductsWeight >= (float) $merchantDetails['tailLiftValue'])) {
                     $formData['isDropOffTailLift'] = 1;
@@ -378,13 +301,6 @@ class FastCourierUpdateQuotes
 
                 if ($isAllowShipping && $eligibleForShippingFlag) {
                     if ($location['is_flat_enable'] == 1 && isPostCodeIncludedInFlatRate($formData['destinationPostcode'], $location['flat_shipping_postcodes'])) {
-                        if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                            wc_get_logger()->debug(
-                                '[fc] Quote path=flat_rate flat_price=' . $location['flat_rate'],
-                                ['source' => 'wmsd']
-                            );
-                        }
-
                         $formData['subOrderType'] = 'flat_rate';
                         $formData['flatPrice'] = $location['flat_rate'];
 
@@ -395,18 +311,11 @@ class FastCourierUpdateQuotes
                             $response['data']['order_type'] = ORDER_TYPE_FLATRATE;
                         }
                     } else {
-                        if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                            wc_get_logger()->debug('[fc] Quote path=live_quote endpoint=quote', ['source' => 'wmsd']);
-                        }
 
                         $response = FastCourierRequests::httpGet('quote', $formData);
                     }
 
                     if ($response['status'] == 400) {
-                        if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                            wc_get_logger()->debug('[fc] Quote path=fallback endpoint=create-fallback-order', ['source' => 'wmsd']);
-                        }
-
                         $formData['subOrderType'] = ORDER_TYPE_FALLBACK;
                         $formData['fallbackPrice'] = $merchantDetails['fallbackAmount'];
 
@@ -456,17 +365,6 @@ class FastCourierUpdateQuotes
                 $response['data']['packages'] = $individualPacks;
                 $response['data']['shipping_type'] = $shippingStatus;
                 $response['data']['destination'] = $destinationData;
-
-                if (defined('WMSD_DEBUG') && WMSD_DEBUG && function_exists('wc_get_logger')) {
-                    $final_price = $response['data']['data']['priceIncludingGst'] ?? ($response['data']['priceIncludingGst'] ?? 'n/a');
-                    wc_get_logger()->debug(
-                        '[fc] Final quote result shipping_type=' . ($response['data']['shipping_type'] ?? 'n/a')
-                        . ' order_type=' . ($response['data']['order_type'] ?? 'n/a')
-                        . ' priceIncludingGst=' . $final_price,
-                        ['source' => 'wmsd']
-                    );
-                }
-
                 $body[] = $response['data'];
                 $allPackages[] = $individualPacks;
             }

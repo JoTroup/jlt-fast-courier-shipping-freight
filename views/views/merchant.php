@@ -370,7 +370,7 @@ $configSessionArray = [];
 
 <?php
 global $token;
-$portal_url = is_test_mode_active() ? $GLOBALS['api_origin'] : $GLOBALS['prod_api_origin'];
+$portal_url = is_test_mode_active() ? $GLOBALS['auth_api_origin'] : $GLOBALS['auth_prod_api_origin'];
 ?>
 
 <script>
@@ -396,7 +396,7 @@ $portal_url = is_test_mode_active() ? $GLOBALS['api_origin'] : $GLOBALS['prod_ap
             dataType: 'json',
             headers: {
                 'Authorization': `Bearer <?php echo $token ?>`,
-                'version': '5.2.2',
+                'version': '5.2.3',
             },
             data: {
                 q: 'term', // Query parameter

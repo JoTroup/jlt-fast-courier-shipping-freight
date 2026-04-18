@@ -1223,7 +1223,7 @@ if (!function_exists('fc_add_jscript_checkout')) {
                             dataType: 'json',
                             headers: {
                                 'Authorization': `Bearer <?php echo $token ?>`,
-                                'version': '5.2.2',
+                                'version': '5.2.3',
                             },
                             data: {
                                 q: 'term', // Query parameter
@@ -1915,7 +1915,7 @@ if (!function_exists('oauth_callback')) {
             $decodedURI = urldecode($redirectURI);
             $urlParts = parse_url($decodedURI);
             parse_str($urlParts['query'] ?? '', $queryParams);
-            $redirectUrl = connect_fc_apis_prefix();
+            $redirectUrl = is_test_mode_active() ? $GLOBALS['auth_api_origin'] : $GLOBALS['auth_prod_api_origin'];
             header("Location: {$redirectUrl}oauth/callback?code={$code}&state={$state}&redirect_uri={$redirectURI}");
             exit;
         }

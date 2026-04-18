@@ -122,7 +122,7 @@
 
 
 <?php
-$portal_url = is_test_mode_active() ? $GLOBALS['api_origin'] : $GLOBALS['prod_api_origin'];
+$portal_url = is_test_mode_active() ? $GLOBALS['auth_api_origin'] : $GLOBALS['auth_prod_api_origin'];
 
 
 function fetch_and_store_fastcourier_credentials($portal_url)

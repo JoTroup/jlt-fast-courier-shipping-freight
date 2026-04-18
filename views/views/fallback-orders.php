@@ -122,7 +122,18 @@ $portal_url = is_test_mode_active() ? $GLOBALS['api_origin'] : $GLOBALS['prod_ap
                         <?php echo esc_html($shippingTypes[$order->get_meta('fc_order_shipping_type')] ?? '-') ?>
                     </td>
                     <td>
-                        <a class="btn btn-primary mt-2 mx-2" href="<?php echo $portal_url ?>fallback-plugin-shipments?order_type=fallback" target="_blank">Book Order</a>
+                        <?php
+                        $hash_id = '';
+                        foreach ($quote ?? [] as $qi) {
+                            if (!empty($qi['order_id'])) {
+                                $hash_id = $qi['order_id'];
+                                break;
+                            }
+                        }
+
+                        $book_url = esc_url($portal_url . 'plugin-shipments?order_type=fallback' . ($hash_id ? '&type=hash_id&search=' . urlencode($hash_id) : ''));
+                        ?>
+                        <a class="btn btn-primary mt-2 mx-2" href="<?php echo $book_url; ?>" target="_blank">Book Order</a>
                     </td>
                 </tr>
             <?php
