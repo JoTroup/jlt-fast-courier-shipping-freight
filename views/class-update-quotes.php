@@ -69,6 +69,17 @@ class FastCourierUpdateQuotes
          * array key will be the primary key (id) of location and value will be WC_Product.
          */
         $seprated_items = [];
+        $cartLineCountsByProduct = [];
+
+        foreach ($cartItems as $cartItemCountProbe) {
+            $countProductId = (isset($cartItemCountProbe['variation_id']) && $cartItemCountProbe['variation_id'] > 0)
+                ? (int) $cartItemCountProbe['variation_id']
+                : (int) $cartItemCountProbe['product_id'];
+            if (!isset($cartLineCountsByProduct[$countProductId])) {
+                $cartLineCountsByProduct[$countProductId] = 0;
+            }
+            $cartLineCountsByProduct[$countProductId]++;
+        }
 
         foreach ($cartItems as $cartItemKey => $item) {
 
@@ -107,8 +118,17 @@ class FastCourierUpdateQuotes
             if (!empty($wmsd_session_overrides['cart_items'][$cartItemKey]) && is_array($wmsd_session_overrides['cart_items'][$cartItemKey])) {
                 $overridesToApply = $wmsd_session_overrides['cart_items'][$cartItemKey];
             } elseif (!empty($wmsd_session_overrides[$product_id]) && is_array($wmsd_session_overrides[$product_id])) {
-                // Backward-compatible fallback for older override sessions.
-                $overridesToApply = $wmsd_session_overrides[$product_id];
+                $productLineCount = isset($cartLineCountsByProduct[$product_id]) ? (int) $cartLineCountsByProduct[$product_id] : 1;
+                if ($productLineCount <= 1) {
+                    // Backward-compatible fallback for older override sessions.
+                    $overridesToApply = $wmsd_session_overrides[$product_id];
+                } else {
+                    Self::logPackingDebug('Skipping product-level WMSD override fallback because multiple cart lines share same product id', [
+                        'product_id' => $product_id,
+                        'cart_item_key' => $cartItemKey,
+                        'product_line_count' => $productLineCount,
+                    ]);
+                }
             }
 
             if (!empty($overridesToApply)) {
