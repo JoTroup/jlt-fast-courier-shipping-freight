@@ -417,6 +417,8 @@ class FastCourierUpdateQuotes
                     }
                 }
 
+                $individualPacks = Self::combinePalletPacksByHeight($individualPacks);
+
                 $formData = Self::qouteDataFormatter($customerData, $location, $individualPacks);
                 if (!$formData) return false;
 
@@ -803,6 +805,7 @@ class FastCourierUpdateQuotes
                     'name' => $palletCandidate['package_name'] ?? ($pack['name'] . ' Pallet'),
                     'type' => $palletCandidate['package_type'] ?? 'pallet',
                     'height' => $calculatedPalletHeight,
+                    'max_height' => $palletHeight,
                     'width' => (int) $palletCandidate['outside_w'],
                     'length' => (int) $palletCandidate['outside_l'],
                     'weight' => round($sectionsOnThisPallet * $sectionWeight, 2),
@@ -834,6 +837,98 @@ class FastCourierUpdateQuotes
         ]);
 
         return [];
+    }
+
+    static function combinePalletPacksByHeight($packs)
+    {
+        $nonPalletPacks = [];
+        $palletBuckets = [];
+
+        foreach ($packs as $pack) {
+            if (!isset($pack['type']) || strtolower((string) $pack['type']) !== 'pallet' || empty($pack['sub_packs']) || !is_array($pack['sub_packs'])) {
+                $nonPalletPacks[] = $pack;
+                continue;
+            }
+
+            $bucketKey = implode('|', [
+                strtolower((string) ($pack['type'] ?? 'pallet')),
+                (int) ($pack['length'] ?? 0),
+                (int) ($pack['width'] ?? 0),
+                (int) ($pack['max_height'] ?? $pack['height'] ?? 0),
+            ]);
+
+            if (!isset($palletBuckets[$bucketKey])) {
+                $palletBuckets[$bucketKey] = [];
+            }
+
+            foreach ($pack['sub_packs'] as $subPack) {
+                $palletBuckets[$bucketKey]['prototype'] = $pack;
+                $palletBuckets[$bucketKey]['sub_packs'][] = $subPack;
+            }
+        }
+
+        $combinedPallets = [];
+        foreach ($palletBuckets as $bucket) {
+            if (empty($bucket['sub_packs']) || empty($bucket['prototype'])) {
+                continue;
+            }
+
+            $prototype = $bucket['prototype'];
+            $maxHeight = (int) ($prototype['max_height'] ?? $prototype['height'] ?? 0);
+            if ($maxHeight <= 0) {
+                $maxHeight = 1;
+            }
+
+            $currentPallet = null;
+            $currentHeight = 0;
+            $currentWeight = 0.0;
+
+            foreach ($bucket['sub_packs'] as $subPack) {
+                $subHeight = max(1, (int) ($subPack['height'] ?? 1));
+                $subWeight = (float) ($subPack['weight'] ?? 0);
+
+                if ($currentPallet === null || ($currentHeight + $subHeight) > $maxHeight) {
+                    if ($currentPallet !== null) {
+                        $currentPallet['height'] = $currentHeight;
+                        $currentPallet['weight'] = round($currentWeight, 2);
+                        $combinedPallets[] = $currentPallet;
+                    }
+
+                    $currentPallet = [
+                        'name' => $prototype['name'],
+                        'type' => $prototype['type'],
+                        'length' => $prototype['length'],
+                        'width' => $prototype['width'],
+                        'height' => 0,
+                        'max_height' => $maxHeight,
+                        'weight' => 0,
+                        'quantity' => 1,
+                        'sub_packs' => [],
+                    ];
+                    $currentHeight = 0;
+                    $currentWeight = 0.0;
+                }
+
+                $currentPallet['sub_packs'][] = $subPack;
+                $currentHeight += $subHeight;
+                $currentWeight += $subWeight;
+            }
+
+            if ($currentPallet !== null) {
+                $currentPallet['height'] = $currentHeight;
+                $currentPallet['weight'] = round($currentWeight, 2);
+                $combinedPallets[] = $currentPallet;
+            }
+        }
+
+        if (count($combinedPallets) > 0) {
+            Self::logPackingDebug('Combined pallet packs by height', [
+                'input_pack_count' => count($packs),
+                'combined_pallet_count' => count($combinedPallets),
+            ]);
+        }
+
+        return array_merge($nonPalletPacks, $combinedPallets);
     }
 
     static function checkMandatoryAddressFields($address)
