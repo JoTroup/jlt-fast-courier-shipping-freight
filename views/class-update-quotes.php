@@ -23,6 +23,65 @@ class FastCourierUpdateQuotes
         }
     }
 
+    private static function collectQuoteProviderCosts($value, &$rows)
+    {
+        if (!is_array($value)) {
+            return;
+        }
+
+        $providerKeys = ['providername', 'provider', 'couriername', 'carriername', 'servicename', 'name', 'courier'];
+        $costKeys = ['priceincludinggst', 'price', 'cost', 'amount', 'total', 'freightamount'];
+
+        $provider = null;
+        $cost = null;
+
+        foreach ($value as $key => $item) {
+            if (!is_scalar($item)) {
+                continue;
+            }
+
+            $normalizedKey = strtolower((string) $key);
+            if ($provider === null && in_array($normalizedKey, $providerKeys, true) && $item !== '') {
+                $provider = (string) $item;
+            }
+
+            if ($cost === null && in_array($normalizedKey, $costKeys, true) && $item !== '') {
+                $cost = is_numeric($item) ? (float) $item : (string) $item;
+            }
+        }
+
+        if ($provider !== null || $cost !== null) {
+            $rows[] = [
+                'provider' => $provider,
+                'cost' => $cost,
+            ];
+        }
+
+        foreach ($value as $child) {
+            if (is_array($child)) {
+                Self::collectQuoteProviderCosts($child, $rows);
+            }
+        }
+    }
+
+    private static function logQuoteSummary($response, $orderType)
+    {
+        $rows = [];
+        Self::collectQuoteProviderCosts($response, $rows);
+
+        $uniqueRows = [];
+        foreach ($rows as $row) {
+            $rowKey = ($row['provider'] ?? '') . '|' . ($row['cost'] ?? '');
+            $uniqueRows[$rowKey] = $row;
+        }
+
+        Self::logPackingDebug('Quote provider and cost', [
+            'order_type' => $orderType,
+            'status' => $response['status'] ?? null,
+            'quotes' => array_values($uniqueRows),
+        ]);
+    }
+
     public static function checkingQuotes($package = [])
     {
         global $wpdb, $fc_packages_table;
@@ -442,6 +501,7 @@ class FastCourierUpdateQuotes
                         $formData['flatPrice'] = $location['flat_rate'];
 
                         $response = FastCourierRequests::httpPost('create-flate-order', $formData);
+                        Self::logQuoteSummary($response, 'flat_rate');
 
                         if ($response['status'] == 200) {
                             $response['data']['data']['priceIncludingGst'] = $location['flat_rate'];
@@ -450,6 +510,7 @@ class FastCourierUpdateQuotes
                     } else {
 
                         $response = FastCourierRequests::httpGet('quote', $formData);
+                        Self::logQuoteSummary($response, 'standard');
                     }
 
                     if ($response['status'] == 400) {
@@ -457,6 +518,7 @@ class FastCourierUpdateQuotes
                         $formData['fallbackPrice'] = $merchantDetails['fallbackAmount'];
 
                         $response = FastCourierRequests::httpPost('create-fallback-order', $formData);
+                        Self::logQuoteSummary($response, 'fallback');
 
                         $session->set('is_fallback_shipping', true);
                         $session->set('fallback_shipping', $merchantDetails['fallbackAmount']);
@@ -502,6 +564,7 @@ class FastCourierUpdateQuotes
                 $response['data']['packages'] = $individualPacks;
                 $response['data']['shipping_type'] = $shippingStatus;
                 $response['data']['destination'] = $destinationData;
+
                 $body[] = $response['data'];
                 $allPackages[] = $individualPacks;
             }
