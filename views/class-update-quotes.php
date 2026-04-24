@@ -742,6 +742,7 @@ class FastCourierUpdateQuotes
 
             while ($remainingSections > 0) {
                 $sectionsOnThisPallet = min($maxSectionsPerPallet, $remainingSections);
+                $calculatedPalletHeight = max(1, min($palletHeight, $sectionsOnThisPallet * max($itemHeight, 1)));
                 $subPacks = [];
 
                 for ($i = 0; $i < $sectionsOnThisPallet; $i++) {
@@ -759,7 +760,7 @@ class FastCourierUpdateQuotes
                 $stackedPallets[] = [
                     'name' => $palletCandidate['package_name'] ?? ($pack['name'] . ' Pallet'),
                     'type' => $palletCandidate['package_type'] ?? 'pallet',
-                    'height' => (int) $palletCandidate['outside_h'],
+                    'height' => $calculatedPalletHeight,
                     'width' => (int) $palletCandidate['outside_w'],
                     'length' => (int) $palletCandidate['outside_l'],
                     'weight' => round($sectionsOnThisPallet * $sectionWeight, 2),
@@ -776,6 +777,9 @@ class FastCourierUpdateQuotes
                 'sections_per_item' => $sectionsPerItem,
                 'max_sections_per_pallet' => $maxSectionsPerPallet,
                 'selected_pallet' => $palletCandidate,
+                'calculated_pallet_heights' => array_map(function ($stackedPallet) {
+                    return $stackedPallet['height'];
+                }, $stackedPallets),
                 'generated_pallet_count' => count($stackedPallets),
             ]);
 
