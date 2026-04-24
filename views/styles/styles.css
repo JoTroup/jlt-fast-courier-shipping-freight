@@ -177,6 +177,17 @@ table.table-packages tbody tr td:first-child::before {
   float: right;
 }
 
+.fast-courier .fc-modified-by-jltsoftware {
+  margin: 12px 30px 0;
+  padding: 10px 14px;
+  border: 1px solid #f2d4b6;
+  background: #fff5ea;
+  color: #5e4730;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .fast-courier .woocommerce-billing-fields .form-row,
 .fast-courier .woocommerce-shipping-fields .form-row,
 .fast-courier .woocommerce form .form-row {

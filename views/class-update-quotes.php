@@ -272,11 +272,15 @@ class FastCourierUpdateQuotes
                             $weight = ($weight <= 0.1) ? 0.1 : $weight;
 
                             $pack = ['name' => $product->get_name(), 'height' => $height, 'width' => $width, 'length' => $length, 'weight' => $weight, 'type' => $pack_type, 'quantity' => $ordered_qty];
+                            $shipsOnPallet = (int) $product->get_meta('fc_ships_on_pallet') === 1;
 
                             if ($is_individual) {
                                 array_push($individualPacks, $pack);
                             } else {
-                                $packer->addItem(new TestItem(wp_json_encode($pack), $pack['width'], $pack['length'], $pack['height'], $pack['weight'], true), $ordered_qty);
+                                $packsToAdd = $shipsOnPallet ? Self::splitPackForPallets($pack, $availablePacakges) : [$pack];
+                                foreach ($packsToAdd as $packToAdd) {
+                                    $packer->addItem(new TestItem(wp_json_encode($packToAdd), $packToAdd['width'], $packToAdd['length'], $packToAdd['height'], $packToAdd['weight'], true), $ordered_qty);
+                                }
                             }
 
                             $totalProductsWeight += $weight * $ordered_qty;
@@ -453,23 +457,147 @@ class FastCourierUpdateQuotes
     {
         $packs = [];
         foreach ($packages as $key => $pack) {
+            $quantity = isset($pack['quantity']) ? (int) $pack['quantity'] : 1;
+            $quantity = ($quantity > 0) ? $quantity : 1;
+            $unitWeight = isset($pack['weight']) ? (float) $pack['weight'] : 0;
+
             $packs[$key] = [
                 'name' => $pack['package_name'] ?? $pack['name'],
                 'type' => $pack['package_type'] ?? $pack['type'],
                 'height' => $pack['height'],
                 'width' => $pack['width'],
                 'length' => $pack['length'],
-                'weight' => isset($pack['weight']) ? $pack['weight'] : 0,
-                'quantity' => $pack['quantity'] ?? 1
+                'weight' => round($unitWeight * $quantity, 2),
+                'quantity' => $quantity
             ];
 
             if (isset($pack['sub_packs']) && count($pack['sub_packs'])) {
                 $packs[$key]['sub_packs'] = $pack['sub_packs'];
-                $packs[$key]['weight'] = strval(array_sum(array_column($pack['sub_packs'], 'weight')));
+                $packs[$key]['weight'] = round(array_sum(array_map('floatval', array_column($pack['sub_packs'], 'weight'))), 2);
             }
         }
 
         return $packs;
+    }
+
+    static function totalShipmentWeight($items)
+    {
+        return round(array_sum(array_map(function ($item) {
+            return isset($item['weight']) ? (float) $item['weight'] : 0;
+        }, $items)), 2);
+    }
+
+    static function canPackFitInPackage($pack, $package)
+    {
+        $itemDimensions = [
+            (int) ($pack['length'] ?? 0),
+            (int) ($pack['width'] ?? 0),
+            (int) ($pack['height'] ?? 0)
+        ];
+        $packageDimensions = [
+            (int) ($package['outside_l'] ?? 0),
+            (int) ($package['outside_w'] ?? 0),
+            (int) ($package['outside_h'] ?? 0)
+        ];
+
+        $rotations = [
+            [$itemDimensions[0], $itemDimensions[1], $itemDimensions[2]],
+            [$itemDimensions[0], $itemDimensions[2], $itemDimensions[1]],
+            [$itemDimensions[1], $itemDimensions[0], $itemDimensions[2]],
+            [$itemDimensions[1], $itemDimensions[2], $itemDimensions[0]],
+            [$itemDimensions[2], $itemDimensions[0], $itemDimensions[1]],
+            [$itemDimensions[2], $itemDimensions[1], $itemDimensions[0]],
+        ];
+
+        foreach ($rotations as $rotation) {
+            if (
+                $rotation[0] <= $packageDimensions[0]
+                && $rotation[1] <= $packageDimensions[1]
+                && $rotation[2] <= $packageDimensions[2]
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static function canPackFitInAnyPackage($pack, $availablePackages)
+    {
+        foreach ($availablePackages as $availablePackage) {
+            if (Self::canPackFitInPackage($pack, $availablePackage)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static function splitPackForPallets($pack, $availablePackages)
+    {
+        if (Self::canPackFitInAnyPackage($pack, $availablePackages)) {
+            return [$pack];
+        }
+
+        $palletCandidates = array_values(array_filter($availablePackages, function ($availablePackage) {
+            return isset($availablePackage['package_type'])
+                && strtolower(trim($availablePackage['package_type'])) === 'pallet';
+        }));
+
+        if (empty($palletCandidates)) {
+            return [$pack];
+        }
+
+        $itemLength = max((int) $pack['length'], (int) $pack['width']);
+        $itemWidth = min((int) $pack['length'], (int) $pack['width']);
+
+        usort($palletCandidates, function ($a, $b) {
+            $aLength = max((int) ($a['outside_l'] ?? 0), (int) ($a['outside_w'] ?? 0));
+            $bLength = max((int) ($b['outside_l'] ?? 0), (int) ($b['outside_w'] ?? 0));
+            return $bLength <=> $aLength;
+        });
+
+        $selectedPallet = null;
+        foreach ($palletCandidates as $palletCandidate) {
+            $palletLength = max((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
+            $palletWidth = min((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
+
+            if ($itemWidth <= $palletWidth && (int) $pack['height'] <= (int) $palletCandidate['outside_h']) {
+                $selectedPallet = [
+                    'length' => $palletLength,
+                    'width' => $palletWidth,
+                ];
+                break;
+            }
+        }
+
+        if (!$selectedPallet) {
+            return [$pack];
+        }
+
+        $sections = (int) ceil($itemLength / $selectedPallet['length']);
+        if ($sections <= 1) {
+            return [$pack];
+        }
+
+        $sectionLength = (int) ceil($itemLength / $sections);
+        $sectionWeight = round(((float) $pack['weight']) / $sections, 2);
+        $sectionWeight = ($sectionWeight <= 0.1) ? 0.1 : $sectionWeight;
+        $splitPacks = [];
+
+        for ($i = 0; $i < $sections; $i++) {
+            $splitPacks[] = [
+                'name' => $pack['name'],
+                'height' => (int) $pack['height'],
+                'width' => $itemWidth,
+                'length' => $sectionLength,
+                'weight' => $sectionWeight,
+                'type' => 'pallet',
+                'quantity' => 1,
+            ];
+        }
+
+        return $splitPacks;
     }
 
     static function checkMandatoryAddressFields($address)
@@ -549,6 +677,8 @@ class FastCourierUpdateQuotes
             }
             $email = $address['billing_email'];
             $phone = $address['billing_phone'];
+            $formattedItems = Self::formatPackages($items);
+            $totalShipmentWeight = Self::totalShipmentWeight($formattedItems);
 
             $data = [
                 'pickupFirstName' => $location['first_name'],
@@ -582,7 +712,8 @@ class FastCourierUpdateQuotes
                 'parcelContent' => 'Order from ' . $location['location_name'],
 
                 'valueOfContent' => WC()->cart->get_cart_contents_total(),
-                'items' => Self::formatPackages($items)
+                'items' => $formattedItems,
+                'totalWeight' => $totalShipmentWeight
             ];
 
             if (isset($address['fc_atl_checkbox'])) {
@@ -605,6 +736,8 @@ class FastCourierUpdateQuotes
             $postcode = $customer['shipping_postcode'];
             $buildingType = empty($customer['shipping_company']) ? 'residential' : 'commercial';
             $companyName = empty($customer['shipping_company']) ? 'NA' : $customer['shipping_company'];
+            $formattedItems = Self::formatPackages($items);
+            $totalShipmentWeight = Self::totalShipmentWeight($formattedItems);
 
             $data = [
                 'pickupFirstName' => $location['first_name'],
@@ -638,7 +771,8 @@ class FastCourierUpdateQuotes
                 'parcelContent' => 'Order from ' . $location['location_name'],
 
                 'valueOfContent' => WC()->cart->get_cart_contents_total(),
-                'items' => Self::formatPackages($items)
+                'items' => $formattedItems,
+                'totalWeight' => $totalShipmentWeight
             ];
         }
         return $data;

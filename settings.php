@@ -132,24 +132,6 @@ include 'configs.php';
 include 'functions.php';
 include 'actions.php';
 
-if (!function_exists('fc_jltsoftware_modified_banner')) {
-    /**
-     * Show a persistent admin banner identifying this forked plugin build.
-     */
-    function fc_jltsoftware_modified_banner()
-    {
-        if (!is_admin()) {
-            return;
-        }
-
-        echo '<div class="notice notice-warning" style="margin: 8px 20px 0 2px;">';
-        echo '<p><strong>jltSoftware Notice:</strong> This is a modified version of Fast Courier - Shipping & Freight maintained by jltSoftware.</p>';
-        echo '</div>';
-    }
-
-    add_action('in_admin_header', 'fc_jltsoftware_modified_banner');
-}
-
 
 /**
  * Starts the plugin.

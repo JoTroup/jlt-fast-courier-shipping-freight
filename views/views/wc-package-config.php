@@ -200,6 +200,14 @@ $jsTags = json_encode($tags);
             <div class="row">
                 <p style="font-size: 14px; font-weight: 600;" data-prefix="" data-parent="packages" data-row="<?php echo ($rowCounter == 0) ? 1 : $rowCounter ?>" class="add-dimensions-row"><a href="#">Add More Row</a></p>
             </div>
+            <div class="row mb-2">
+                <div class="col-sm-12">
+                    <label>
+                        <input type="checkbox" name="fc_ships_on_pallet" value="1" <?php echo $product->get_meta('fc_ships_on_pallet') ? 'checked' : '' ?>>
+                        Ships on pallet (disassembled for oversized freight)
+                    </label>
+                </div>
+            </div>
             <div class="row">
                 <p style="font-size: 16px; font-weight: 700;">Location Assigment</p>
             </div>

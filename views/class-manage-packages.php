@@ -62,6 +62,7 @@ class FastCourierManagePackages
                 update_post_meta($outputArray['pId'], 'fc_length', $postData['length']);
                 update_post_meta($outputArray['pId'], 'fc_weight', $postData['weight']);
                 update_post_meta($outputArray['pId'], 'fc_is_individual', $postData['individual']);
+                update_post_meta($outputArray['pId'], 'fc_ships_on_pallet', isset($postData['ships_on_pallet']) ? $postData['ships_on_pallet'] : 0);
                 update_post_meta($outputArray['pId'], 'fc_package_type', $postData['package_type']);
                 $i++;
             }
@@ -187,6 +188,7 @@ class FastCourierManagePackages
                             }
 
                             $variable_product = wc_get_product($variation['variation_id']);
+                            $shipsOnPallet = (int) get_post_meta($id, 'fc_ships_on_pallet', true);
                             // Delete the fc meta fields
                             delete_fc_meta($variable_product);
 
@@ -203,6 +205,7 @@ class FastCourierManagePackages
                             update_post_meta($id, 'fc_length', $length);
                             update_post_meta($id, 'fc_weight', $weight);
                             update_post_meta($id, 'fc_is_individual', 1);
+                            update_post_meta($id, 'fc_ships_on_pallet', $shipsOnPallet);
                             update_post_meta($id, 'fc_package_type', $pack_type);
                             update_post_meta($id, 'fc_last_synced', $current_date_time);
                             $fc_last_synced = $last_updated = '';
@@ -225,6 +228,7 @@ class FastCourierManagePackages
                         }
                     }
                     // Delete the old fc meta fields
+                    $shipsOnPallet = (int) $product->get_meta('fc_ships_on_pallet');
                     delete_fc_meta($product);
 
                     // Get the dimensions and weight of the product
@@ -240,6 +244,7 @@ class FastCourierManagePackages
                     $product->update_meta_data('fc_length', $length);
                     $product->update_meta_data('fc_weight', $weight);
                     $product->update_meta_data('fc_is_individual', 1);
+                    $product->update_meta_data('fc_ships_on_pallet', $shipsOnPallet);
                     $product->update_meta_data('fc_package_type', $pack_type);
                     $product->update_meta_data('fc_last_synced', $current_date_time);
                     $product->save();
@@ -394,7 +399,7 @@ class FastCourierManagePackages
                     $packageType = $row[7] ? trim($row[7]) : "box"; // set default as "BOX"
 
                     // Check if the product is not shipped individually, and any shipping package is available 
-                    if ($individual != "" && strtolower($individual) == 'no') {
+                    if ($individual != "" && strtolower($individual) == 'no' && strtolower($packageType) != 'pallet') {
 
                         $shippingPackageAvailable = 0;
 
@@ -448,6 +453,7 @@ class FastCourierManagePackages
                             'fc_height' => $height,
                             'fc_weight' => $weight,
                             'fc_is_individual' => ($individual != "" && strtolower($individual) == 'yes') ? 1 : 0,
+                            'fc_ships_on_pallet' => (strtolower($packageType) == 'pallet') ? 1 : 0,
                             'fc_package_type' => ($packageType != "") ? strtolower($packageType) : "",
                         ];
                     }

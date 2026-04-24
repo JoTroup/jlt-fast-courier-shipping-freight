@@ -31,6 +31,7 @@ class FastCourierMenuPage
     {
         extract($vars);
         $colWidth = $isFullPage ? 12 : 10;
+        $isLoginPage = $isFullPage && isset($page_title) && $page_title === 'Login';
 
         include_once('views/common/test-mode-header.php');
         echo '<div class="wrap fast-courier"><div class="container-fluid position-relative"><div class="row">';
@@ -39,6 +40,9 @@ class FastCourierMenuPage
         include ('views/common/sidenav.php');
         
         if (isset($header) && $header) include_once('views/common/header.php');
+        if (!$isLoginPage) {
+            echo "<div class='fc-modified-by-jltsoftware'>This plugin has been modified by jltSoftware.</div>";
+        }
         echo "<div class='fc-wraper'>";
         include_once($file);
         include_once('views/common/loader.php');
@@ -143,6 +147,7 @@ class FastCourierMenuPage
                 $length = (int) $product->get_meta('fc_length') ?? 0;
                 $weight = (float) $product->get_meta('fc_weight') ?? 1;
                 $pack_type = $product->get_meta('fc_package_type');
+                $shipsOnPallet = (int) $product->get_meta('fc_ships_on_pallet') === 1;
                 $name = $product->get_name();
                 $pack = ['name' => $name, 'height' => $height, 'width' => $width, 'length' => $length, 'weight' => $weight, 'type' => $pack_type, 'quantity' => 1];
 
@@ -164,6 +169,10 @@ class FastCourierMenuPage
                     $packedBoxes = $packer->pack();
                     $package_found_for_product_ids[$id] = $name;
                 } catch (NoBoxesAvailableException $e) {
+                    if ($shipsOnPallet) {
+                        $package_found_for_product_ids[$id] = $name;
+                        continue;
+                    }
                     $package_not_available_for_product_ids[$id] = $name;
                     $productIssues = $name;
                 }

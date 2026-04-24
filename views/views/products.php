@@ -259,6 +259,14 @@ if (!isset($_GET['category']))
                                 </div>
                             </div>
                         </div>
+                        <div class="col-sm-12">
+                            <div class="form-group">
+                                <label for="ships_on_pallet">
+                                    <input type="checkbox" id="ships_on_pallet" name="ships_on_pallet" value="1">
+                                    Ships on pallet (allow oversized item splitting)
+                                </label>
+                            </div>
+                        </div>
                     </div>
                     <a href="#" class="add-dimensions-row"> Add More Dimensions </a>
 
@@ -1049,7 +1057,8 @@ if (!isset($_GET['category']))
         }
         // if product is set as not sent individually for shipping
         var individualShipped = $("[name='individual']").serializeArray();
-        if (!individualShipped[0].value || individualShipped[0].value == 0) {
+        var shipsOnPallet = $("#ships_on_pallet").is(':checked');
+        if ((!individualShipped[0].value || individualShipped[0].value == 0) && !shipsOnPallet) {
             var allPackages = <?php echo $packages_json; ?>;
             if (Array.isArray(allPackages) && allPackages.length > 0) {
                 var packageAvailable = 0;

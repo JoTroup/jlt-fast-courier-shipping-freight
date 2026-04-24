@@ -195,6 +195,15 @@ if ($product->is_type('variable')) {
             <div class="row">
                 <p style="font-size: 14px; font-weight: 600;" data-prefix="vData[<?= $variation['variation_id'] ?>]" data-parent="variants_packages_<?= $variation['variation_id'] ?>" data-row="<?php echo ($rowNumber == 0) ? 1 : $rowNumber ?>" class="add-dimensions-row"><a href="#">Add More Row</a></p>
             </div>
+            <div class="row mb-2">
+                <div class="col-sm-12">
+                    <?php $palletField = "vData[" . $variation['variation_id'] . "][fc_ships_on_pallet]"; ?>
+                    <label>
+                        <input type="checkbox" name="<?php echo $palletField ?>" value="1" <?php echo $variable_product->get_meta('fc_ships_on_pallet') ? 'checked' : '' ?>>
+                        Ships on pallet (disassembled for oversized freight)
+                    </label>
+                </div>
+            </div>
             <div class="row">
                 <p style="font-size: 15px; font-weight: 700;">Location Assigment</p>
             </div>

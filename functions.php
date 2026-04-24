@@ -387,6 +387,7 @@ if (!function_exists('fc_woocommerce_product_custom_fields_save')) {
             $product->update_meta_data('fc_length', $postData['fc_length']);
             $product->update_meta_data('fc_weight', $postData['fc_weight']);
             $product->update_meta_data('fc_is_individual', isset($postData['fc_is_individual']) ? $postData['fc_is_individual'] : 0);
+            $product->update_meta_data('fc_ships_on_pallet', isset($postData['fc_ships_on_pallet']) ? $postData['fc_ships_on_pallet'] : 0);
             $product->update_meta_data('fc_package_type', $postData['fc_package_type']);
             $product->update_meta_data('fc_location_type', $postData['fc_location_type']);
             $product->update_meta_data('fc_location', $postData['fc_location']);
@@ -437,6 +438,7 @@ if (!function_exists('fc_save_variations_shipping_configuration')) {
                 update_post_meta($key, 'fc_length', $value['fc_length']);
                 update_post_meta($key, 'fc_weight', $value['fc_weight']);
                 update_post_meta($key, 'fc_is_individual', isset($value['fc_is_individual']) ? $value['fc_is_individual'] : 0);
+                update_post_meta($key, 'fc_ships_on_pallet', isset($value['fc_ships_on_pallet']) ? $value['fc_ships_on_pallet'] : 0);
                 update_post_meta($key, 'fc_package_type', $value['fc_package_type']);
                 update_post_meta($key, 'fc_location_type', $value['fc_location_type']);
                 update_post_meta($key, 'fc_location', $value['fc_location']);
