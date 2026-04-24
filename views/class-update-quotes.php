@@ -70,7 +70,9 @@ class FastCourierUpdateQuotes
          */
         $seprated_items = [];
 
-        foreach ($cartItems as $item) {
+        foreach ($cartItems as $cartItemKey => $item) {
+
+            $cartItemKey = isset($item['key']) && $item['key'] ? (string) $item['key'] : (string) $cartItemKey;
 
             if (isset($item['variation_id']) && $item['variation_id'] > 0) {
                 $product_id = $item['variation_id'];
@@ -101,8 +103,16 @@ class FastCourierUpdateQuotes
             if (function_exists('WC') && WC()->session) {
                 $wmsd_session_overrides = WC()->session->get('wmsd_meta_overrides', []);
             }
-            if (!empty($wmsd_session_overrides[$product_id]) && is_array($wmsd_session_overrides[$product_id])) {
-                foreach ($wmsd_session_overrides[$product_id] as $override_key => $override_value) {
+            $overridesToApply = [];
+            if (!empty($wmsd_session_overrides['cart_items'][$cartItemKey]) && is_array($wmsd_session_overrides['cart_items'][$cartItemKey])) {
+                $overridesToApply = $wmsd_session_overrides['cart_items'][$cartItemKey];
+            } elseif (!empty($wmsd_session_overrides[$product_id]) && is_array($wmsd_session_overrides[$product_id])) {
+                // Backward-compatible fallback for older override sessions.
+                $overridesToApply = $wmsd_session_overrides[$product_id];
+            }
+
+            if (!empty($overridesToApply)) {
+                foreach ($overridesToApply as $override_key => $override_value) {
                     $meta_dimensions[$override_key] = [strval($override_value)];
                     $wc_product->update_meta_data($override_key, $override_value);
                 }
@@ -178,12 +188,12 @@ class FastCourierUpdateQuotes
                 $location = Self::defaultLocation($merchantDetails['id']);
             }
 
-            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']]['products'][] = $wc_product;
+            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']]['products'][$cartItemKey] = $wc_product;
             $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']]['location'] = $location;
-            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']][$product_id]['allow_shipping'] = $allow_shipping;
-            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']][$product_id]['eligibleForShipping'] = $eligibleForShipping;
-            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']]['dimensions'][$product_id] = $dimensionsData;
-            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']][$product_id]['order_qty'] = $item['quantity'];
+            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']][$cartItemKey]['allow_shipping'] = $allow_shipping;
+            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']][$cartItemKey]['eligibleForShipping'] = $eligibleForShipping;
+            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']]['dimensions'][$cartItemKey] = $dimensionsData;
+            $seprated_items['' . $eligibleForFreeShipping]['' . $location['id']][$cartItemKey]['order_qty'] = $item['quantity'];
         }
 
         // getting list of all available package items
@@ -230,7 +240,7 @@ class FastCourierUpdateQuotes
                 $isAllowShipping = $eligibleForShippingFlag = false;
                 $totalProductsWeight = 0;
                 // creating order packages
-                foreach ($products as $product) {
+                foreach ($products as $cartItemKey => $product) {
                     // get product id if product type is variation
                     if (is_a($product, 'WC_Product_Variation')) {
                         $reflection = new \ReflectionClass($product);
@@ -243,17 +253,17 @@ class FastCourierUpdateQuotes
                         // set product id
                         $productId = $product->get_id();
                     }
-                    $allow_shipping = $items[$productId]['allow_shipping'];
-                    $eligibleForShipping = $items[$productId]['eligibleForShipping'];
+                    $allow_shipping = $items[$cartItemKey]['allow_shipping'];
+                    $eligibleForShipping = $items[$cartItemKey]['eligibleForShipping'];
 
                     if ($eligibleForShipping == '1') {
                         $eligibleForShippingFlag = $addShippingQuotesOncheckout = true;
                     }
 
                     // loop for multi shipped products
-                    foreach ($items['dimensions'][$productId] as $k => $value) {
+                    foreach ($items['dimensions'][$cartItemKey] as $k => $value) {
 
-                        $ordered_qty = $items[$productId]['order_qty'];
+                        $ordered_qty = $items[$cartItemKey]['order_qty'];
                         if ($allow_shipping == "1") {
                             $isAllowShipping = true;
                             $isPhysicalProduct = true;
