@@ -3,11 +3,26 @@
 namespace FastCourier;
 
 use DVDoug\BoxPacker\Packer;
+use DVDoug\BoxPacker\NoBoxesAvailableException;
 use DVDoug\BoxPacker\Test\TestBox;  // use your own `Box` implementation
 use DVDoug\BoxPacker\Test\TestItem; // use your own `Item` implementation
 
 class FastCourierUpdateQuotes
 {
+    private static function logPackingDebug($message, $context = [])
+    {
+        $encodedContext = wp_json_encode(is_array($context) ? $context : ['context' => $context]);
+
+        if (function_exists('wc_get_logger')) {
+            wc_get_logger()->debug($message . ' ' . $encodedContext, ['source' => 'fast-courier-packing']);
+            return;
+        }
+
+        if (function_exists('error_log')) {
+            error_log('[fast-courier-packing] ' . $message . ' ' . $encodedContext);
+        }
+    }
+
     public static function checkingQuotes($package = [])
     {
         global $wpdb, $fc_packages_table;
@@ -273,11 +288,22 @@ class FastCourierUpdateQuotes
 
                             $pack = ['name' => $product->get_name(), 'height' => $height, 'width' => $width, 'length' => $length, 'weight' => $weight, 'type' => $pack_type, 'quantity' => $ordered_qty];
                             $shipsOnPallet = (int) $product->get_meta('fc_ships_on_pallet') === 1;
+                            $isPalletTypePack = strtolower((string) $pack_type) === 'pallet';
 
                             if ($is_individual) {
                                 array_push($individualPacks, $pack);
                             } else {
-                                $packsToAdd = $shipsOnPallet ? Self::splitPackForPallets($pack, $availablePacakges) : [$pack];
+                                Self::logPackingDebug('Preparing pack for boxpacker', [
+                                    'product_id' => $productId,
+                                    'pack' => $pack,
+                                    'ships_on_pallet' => $shipsOnPallet,
+                                    'is_pallet_type_pack' => $isPalletTypePack,
+                                ]);
+                                $packsToAdd = ($shipsOnPallet || $isPalletTypePack) ? Self::splitPackForPallets($pack, $availablePacakges) : [$pack];
+                                Self::logPackingDebug('Pack list prepared for boxpacker', [
+                                    'product_id' => $productId,
+                                    'packs_to_add' => $packsToAdd,
+                                ]);
                                 foreach ($packsToAdd as $packToAdd) {
                                     $packer->addItem(new TestItem(wp_json_encode($packToAdd), $packToAdd['width'], $packToAdd['length'], $packToAdd['height'], $packToAdd['weight'], true), $ordered_qty);
                                 }
@@ -305,19 +331,36 @@ class FastCourierUpdateQuotes
                 }
 
                 if ($isAllowShipping && $eligibleForShippingFlag) {
-                    $packedBoxes = $packer->pack();
-                    foreach ($packedBoxes as $packedBox) {
-                        $boxType = $packedBox->getBox();
+                    try {
+                        $packedBoxes = $packer->pack();
+                        foreach ($packedBoxes as $packedBox) {
+                            $boxType = $packedBox->getBox();
 
-                        $box = json_decode($boxType->getReference(), true);
-                        $box['qty'] = 1;
+                            $box = json_decode($boxType->getReference(), true);
+                            $box['qty'] = 1;
 
-                        $packedItems = $packedBox->getItems();
+                            $packedItems = $packedBox->getItems();
 
-                        foreach ($packedItems as $packedItem) {
-                            $box['sub_packs'][] = json_decode($packedItem->getItem()->getDescription(), true);
+                            foreach ($packedItems as $packedItem) {
+                                $box['sub_packs'][] = json_decode($packedItem->getItem()->getDescription(), true);
+                            }
+                            array_push($individualPacks, $box);
                         }
-                        array_push($individualPacks, $box);
+                    } catch (NoBoxesAvailableException $e) {
+                        Self::logPackingDebug('Boxpacker could not pack one or more items', [
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Avoid checkout fatals: pass the failed item through to quote/fallback handling.
+                        if (method_exists($e, 'getItem') && $e->getItem()) {
+                            $failedPack = json_decode($e->getItem()->getDescription(), true);
+                            if (is_array($failedPack) && !empty($failedPack)) {
+                                $failedPack['quantity'] = isset($failedPack['quantity']) ? $failedPack['quantity'] : 1;
+                                $individualPacks[] = $failedPack;
+                                Self::logPackingDebug('Failed pack moved to fallback quote path', [
+                                    'failed_pack' => $failedPack,
+                                ]);
+                            }
+                        }
                     }
                 }
 
@@ -536,6 +579,9 @@ class FastCourierUpdateQuotes
     static function splitPackForPallets($pack, $availablePackages)
     {
         if (Self::canPackFitInAnyPackage($pack, $availablePackages)) {
+            Self::logPackingDebug('No split needed; pack already fits configured package', [
+                'pack' => $pack,
+            ]);
             return [$pack];
         }
 
@@ -545,6 +591,9 @@ class FastCourierUpdateQuotes
         }));
 
         if (empty($palletCandidates)) {
+            Self::logPackingDebug('No pallet candidates available for split', [
+                'pack' => $pack,
+            ]);
             return [$pack];
         }
 
@@ -572,11 +621,21 @@ class FastCourierUpdateQuotes
         }
 
         if (!$selectedPallet) {
+            Self::logPackingDebug('No suitable pallet found for split dimensions', [
+                'pack' => $pack,
+                'item_length' => $itemLength,
+                'item_width' => $itemWidth,
+                'candidate_count' => count($palletCandidates),
+            ]);
             return [$pack];
         }
 
         $sections = (int) ceil($itemLength / $selectedPallet['length']);
         if ($sections <= 1) {
+            Self::logPackingDebug('Split produced single section; using original pack', [
+                'pack' => $pack,
+                'selected_pallet' => $selectedPallet,
+            ]);
             return [$pack];
         }
 
@@ -596,6 +655,13 @@ class FastCourierUpdateQuotes
                 'quantity' => 1,
             ];
         }
+
+        Self::logPackingDebug('Pack split for pallet transport', [
+            'original_pack' => $pack,
+            'selected_pallet' => $selectedPallet,
+            'sections' => $sections,
+            'split_packs' => $splitPacks,
+        ]);
 
         return $splitPacks;
     }
