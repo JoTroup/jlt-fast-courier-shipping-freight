@@ -299,6 +299,17 @@ class FastCourierUpdateQuotes
                                     'ships_on_pallet' => $shipsOnPallet,
                                     'is_pallet_type_pack' => $isPalletTypePack,
                                 ]);
+                                if ($shipsOnPallet || $isPalletTypePack) {
+                                    $stackedPalletPacks = Self::buildStackedPalletPackages($pack, $availablePacakges, $ordered_qty);
+                                    if (!empty($stackedPalletPacks)) {
+                                        $individualPacks = array_merge($individualPacks, $stackedPalletPacks);
+                                        Self::logPackingDebug('Using stacked pallet packs (height-first) and bypassing boxpacker for this item', [
+                                            'product_id' => $productId,
+                                            'stacked_pallet_packs' => $stackedPalletPacks,
+                                        ]);
+                                        continue;
+                                    }
+                                }
                                 $packsToAdd = ($shipsOnPallet || $isPalletTypePack) ? Self::splitPackForPallets($pack, $availablePacakges) : [$pack];
                                 Self::logPackingDebug('Pack list prepared for boxpacker', [
                                     'product_id' => $productId,
@@ -664,6 +675,119 @@ class FastCourierUpdateQuotes
         ]);
 
         return $splitPacks;
+    }
+
+    static function buildStackedPalletPackages($pack, $availablePackages, $orderedQty)
+    {
+        $orderedQty = (int) $orderedQty;
+        $orderedQty = ($orderedQty > 0) ? $orderedQty : 1;
+
+        $palletCandidates = array_values(array_filter($availablePackages, function ($availablePackage) {
+            return isset($availablePackage['package_type'])
+                && strtolower(trim($availablePackage['package_type'])) === 'pallet';
+        }));
+
+        if (empty($palletCandidates)) {
+            return [];
+        }
+
+        usort($palletCandidates, function ($a, $b) {
+            $aLength = max((int) ($a['outside_l'] ?? 0), (int) ($a['outside_w'] ?? 0));
+            $aWidth = min((int) ($a['outside_l'] ?? 0), (int) ($a['outside_w'] ?? 0));
+            $bLength = max((int) ($b['outside_l'] ?? 0), (int) ($b['outside_w'] ?? 0));
+            $bWidth = min((int) ($b['outside_l'] ?? 0), (int) ($b['outside_w'] ?? 0));
+
+            $aArea = $aLength * $aWidth;
+            $bArea = $bLength * $bWidth;
+
+            if ($aArea !== $bArea) {
+                return $aArea <=> $bArea;
+            }
+
+            return $aLength <=> $bLength;
+        });
+
+        $itemLength = max((int) $pack['length'], (int) $pack['width']);
+        $itemWidth = min((int) $pack['length'], (int) $pack['width']);
+        $itemHeight = (int) $pack['height'];
+
+        foreach ($palletCandidates as $palletCandidate) {
+            $palletLength = max((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
+            $palletWidth = min((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
+            $palletHeight = (int) $palletCandidate['outside_h'];
+
+            if ($itemWidth > $palletWidth || $itemHeight > $palletHeight) {
+                continue;
+            }
+
+            $sectionsPerItem = (int) ceil($itemLength / $palletLength);
+            $sectionsPerItem = ($sectionsPerItem > 0) ? $sectionsPerItem : 1;
+
+            $sectionLength = (int) ceil($itemLength / $sectionsPerItem);
+            if ($sectionLength > $palletLength) {
+                continue;
+            }
+
+            $maxSectionsPerPallet = (int) floor($palletHeight / max($itemHeight, 1));
+            if ($maxSectionsPerPallet < 1) {
+                continue;
+            }
+
+            $totalSections = $sectionsPerItem * $orderedQty;
+            $sectionWeight = round(((float) $pack['weight']) / $sectionsPerItem, 2);
+            $sectionWeight = ($sectionWeight <= 0.1) ? 0.1 : $sectionWeight;
+
+            $remainingSections = $totalSections;
+            $stackedPallets = [];
+
+            while ($remainingSections > 0) {
+                $sectionsOnThisPallet = min($maxSectionsPerPallet, $remainingSections);
+                $subPacks = [];
+
+                for ($i = 0; $i < $sectionsOnThisPallet; $i++) {
+                    $subPacks[] = [
+                        'name' => $pack['name'],
+                        'height' => $itemHeight,
+                        'width' => $itemWidth,
+                        'length' => $sectionLength,
+                        'weight' => $sectionWeight,
+                        'type' => $pack['type'] ?? 'pallet',
+                        'quantity' => 1,
+                    ];
+                }
+
+                $stackedPallets[] = [
+                    'name' => $palletCandidate['package_name'] ?? ($pack['name'] . ' Pallet'),
+                    'type' => $palletCandidate['package_type'] ?? 'pallet',
+                    'height' => (int) $palletCandidate['outside_h'],
+                    'width' => (int) $palletCandidate['outside_w'],
+                    'length' => (int) $palletCandidate['outside_l'],
+                    'weight' => round($sectionsOnThisPallet * $sectionWeight, 2),
+                    'quantity' => 1,
+                    'sub_packs' => $subPacks,
+                ];
+
+                $remainingSections -= $sectionsOnThisPallet;
+            }
+
+            Self::logPackingDebug('Selected pallet candidate using height-first stacking', [
+                'original_pack' => $pack,
+                'ordered_qty' => $orderedQty,
+                'sections_per_item' => $sectionsPerItem,
+                'max_sections_per_pallet' => $maxSectionsPerPallet,
+                'selected_pallet' => $palletCandidate,
+                'generated_pallet_count' => count($stackedPallets),
+            ]);
+
+            return $stackedPallets;
+        }
+
+        Self::logPackingDebug('No pallet candidate could satisfy height-first stacking constraints', [
+            'pack' => $pack,
+            'ordered_qty' => $orderedQty,
+        ]);
+
+        return [];
     }
 
     static function checkMandatoryAddressFields($address)
