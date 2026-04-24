@@ -9,9 +9,6 @@ use DVDoug\BoxPacker\Test\TestItem; // use your own `Item` implementation
 
 class FastCourierUpdateQuotes
 {
-    private const MAX_PALLET_LENGTH_CM = 360;
-    private const MAX_PALLET_WIDTH_CM = 200;
-
     private static function logPackingDebug($message, $context = [])
     {
         $encodedContext = wp_json_encode(is_array($context) ? $context : ['context' => $context]);
@@ -648,10 +645,7 @@ class FastCourierUpdateQuotes
                 return false;
             }
 
-            $footprintLength = max((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
-            $footprintWidth = min((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
-
-            return $footprintLength <= self::MAX_PALLET_LENGTH_CM && $footprintWidth <= self::MAX_PALLET_WIDTH_CM;
+            return true;
         }));
 
         if (empty($palletCandidates)) {
@@ -740,10 +734,7 @@ class FastCourierUpdateQuotes
                 return false;
             }
 
-            $footprintLength = max((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
-            $footprintWidth = min((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
-
-            return $footprintLength <= self::MAX_PALLET_LENGTH_CM && $footprintWidth <= self::MAX_PALLET_WIDTH_CM;
+            return true;
         }));
 
         if (empty($palletCandidates)) {
@@ -769,11 +760,14 @@ class FastCourierUpdateQuotes
         $itemLength = max((int) $pack['length'], (int) $pack['width']);
         $itemWidth = min((int) $pack['length'], (int) $pack['width']);
         $itemHeight = (int) $pack['height'];
+        $palletLimits = Self::getPalletLimits($palletCandidates);
+        $maxPalletLength = $palletLimits['max_length'];
+        $maxPalletWidth = $palletLimits['max_width'];
 
-        // Do not split signs that are within the max pallet footprint length.
+        // Do not split signs that are within the configured maximum pallet length.
         $sectionsPerItem = 1;
-        if ($itemLength > self::MAX_PALLET_LENGTH_CM) {
-            $sectionsPerItem = (int) ceil($itemLength / self::MAX_PALLET_LENGTH_CM);
+        if ($maxPalletLength > 0 && $itemLength > $maxPalletLength) {
+            $sectionsPerItem = (int) ceil($itemLength / $maxPalletLength);
         }
         $sectionsPerItem = ($sectionsPerItem > 0) ? $sectionsPerItem : 1;
 
@@ -783,10 +777,6 @@ class FastCourierUpdateQuotes
             $palletLength = max((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
             $palletWidth = min((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
             $palletHeight = (int) $palletCandidate['outside_h'];
-
-            if ($palletLength > self::MAX_PALLET_LENGTH_CM || $palletWidth > self::MAX_PALLET_WIDTH_CM) {
-                continue;
-            }
 
             if ($itemWidth > $palletWidth || $itemHeight > $palletHeight) {
                 continue;
@@ -846,6 +836,8 @@ class FastCourierUpdateQuotes
                 'item_length' => $itemLength,
                 'item_width' => $itemWidth,
                 'item_height' => $itemHeight,
+                'max_pallet_length' => $maxPalletLength,
+                'max_pallet_width' => $maxPalletWidth,
                 'sections_per_item' => $sectionsPerItem,
                 'section_length' => $sectionLength,
                 'max_sections_per_pallet' => $maxSectionsPerPallet,
@@ -865,6 +857,29 @@ class FastCourierUpdateQuotes
         ]);
 
         return [];
+    }
+
+    private static function getPalletLimits($palletCandidates)
+    {
+        $maxLength = 0;
+        $maxWidth = 0;
+
+        foreach ($palletCandidates as $palletCandidate) {
+            $length = max((int) ($palletCandidate['outside_l'] ?? 0), (int) ($palletCandidate['outside_w'] ?? 0));
+            $width = min((int) ($palletCandidate['outside_l'] ?? 0), (int) ($palletCandidate['outside_w'] ?? 0));
+
+            if ($length > $maxLength) {
+                $maxLength = $length;
+            }
+            if ($width > $maxWidth) {
+                $maxWidth = $width;
+            }
+        }
+
+        return [
+            'max_length' => $maxLength,
+            'max_width' => $maxWidth,
+        ];
     }
 
     static function combinePalletPacksByHeight($packs)
