@@ -9,6 +9,9 @@ use DVDoug\BoxPacker\Test\TestItem; // use your own `Item` implementation
 
 class FastCourierUpdateQuotes
 {
+    private const MAX_PALLET_LENGTH_CM = 360;
+    private const MAX_PALLET_WIDTH_CM = 200;
+
     private static function logPackingDebug($message, $context = [])
     {
         $encodedContext = wp_json_encode(is_array($context) ? $context : ['context' => $context]);
@@ -641,8 +644,14 @@ class FastCourierUpdateQuotes
         }
 
         $palletCandidates = array_values(array_filter($availablePackages, function ($availablePackage) {
-            return isset($availablePackage['package_type'])
-                && strtolower(trim($availablePackage['package_type'])) === 'pallet';
+            if (!isset($availablePackage['package_type']) || strtolower(trim($availablePackage['package_type'])) !== 'pallet') {
+                return false;
+            }
+
+            $footprintLength = max((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
+            $footprintWidth = min((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
+
+            return $footprintLength <= self::MAX_PALLET_LENGTH_CM && $footprintWidth <= self::MAX_PALLET_WIDTH_CM;
         }));
 
         if (empty($palletCandidates)) {
@@ -727,8 +736,14 @@ class FastCourierUpdateQuotes
         $orderedQty = ($orderedQty > 0) ? $orderedQty : 1;
 
         $palletCandidates = array_values(array_filter($availablePackages, function ($availablePackage) {
-            return isset($availablePackage['package_type'])
-                && strtolower(trim($availablePackage['package_type'])) === 'pallet';
+            if (!isset($availablePackage['package_type']) || strtolower(trim($availablePackage['package_type'])) !== 'pallet') {
+                return false;
+            }
+
+            $footprintLength = max((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
+            $footprintWidth = min((int) ($availablePackage['outside_l'] ?? 0), (int) ($availablePackage['outside_w'] ?? 0));
+
+            return $footprintLength <= self::MAX_PALLET_LENGTH_CM && $footprintWidth <= self::MAX_PALLET_WIDTH_CM;
         }));
 
         if (empty($palletCandidates)) {
@@ -755,19 +770,28 @@ class FastCourierUpdateQuotes
         $itemWidth = min((int) $pack['length'], (int) $pack['width']);
         $itemHeight = (int) $pack['height'];
 
+        // Do not split signs that are within the max pallet footprint length.
+        $sectionsPerItem = 1;
+        if ($itemLength > self::MAX_PALLET_LENGTH_CM) {
+            $sectionsPerItem = (int) ceil($itemLength / self::MAX_PALLET_LENGTH_CM);
+        }
+        $sectionsPerItem = ($sectionsPerItem > 0) ? $sectionsPerItem : 1;
+
+        $sectionLength = (int) ceil($itemLength / $sectionsPerItem);
+
         foreach ($palletCandidates as $palletCandidate) {
             $palletLength = max((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
             $palletWidth = min((int) $palletCandidate['outside_l'], (int) $palletCandidate['outside_w']);
             $palletHeight = (int) $palletCandidate['outside_h'];
 
+            if ($palletLength > self::MAX_PALLET_LENGTH_CM || $palletWidth > self::MAX_PALLET_WIDTH_CM) {
+                continue;
+            }
+
             if ($itemWidth > $palletWidth || $itemHeight > $palletHeight) {
                 continue;
             }
 
-            $sectionsPerItem = (int) ceil($itemLength / $palletLength);
-            $sectionsPerItem = ($sectionsPerItem > 0) ? $sectionsPerItem : 1;
-
-            $sectionLength = (int) ceil($itemLength / $sectionsPerItem);
             if ($sectionLength > $palletLength) {
                 continue;
             }
@@ -819,7 +843,11 @@ class FastCourierUpdateQuotes
             Self::logPackingDebug('Selected pallet candidate using height-first stacking', [
                 'original_pack' => $pack,
                 'ordered_qty' => $orderedQty,
+                'item_length' => $itemLength,
+                'item_width' => $itemWidth,
+                'item_height' => $itemHeight,
                 'sections_per_item' => $sectionsPerItem,
+                'section_length' => $sectionLength,
                 'max_sections_per_pallet' => $maxSectionsPerPallet,
                 'selected_pallet' => $palletCandidate,
                 'calculated_pallet_heights' => array_map(function ($stackedPallet) {
@@ -842,7 +870,7 @@ class FastCourierUpdateQuotes
     static function combinePalletPacksByHeight($packs)
     {
         $nonPalletPacks = [];
-        $palletBuckets = [];
+        $palletGroups = [];
 
         foreach ($packs as $pack) {
             if (!isset($pack['type']) || strtolower((string) $pack['type']) !== 'pallet' || empty($pack['sub_packs']) || !is_array($pack['sub_packs'])) {
@@ -850,30 +878,39 @@ class FastCourierUpdateQuotes
                 continue;
             }
 
-            $bucketKey = implode('|', [
-                strtolower((string) ($pack['type'] ?? 'pallet')),
-                (int) ($pack['length'] ?? 0),
-                (int) ($pack['width'] ?? 0),
-                (int) ($pack['max_height'] ?? $pack['height'] ?? 0),
-            ]);
-
-            if (!isset($palletBuckets[$bucketKey])) {
-                $palletBuckets[$bucketKey] = [];
+            $groupKey = strtolower((string) ($pack['type'] ?? 'pallet'));
+            if (!isset($palletGroups[$groupKey])) {
+                $palletGroups[$groupKey] = [
+                    'packs' => [],
+                    'sub_packs' => [],
+                ];
             }
 
-            foreach ($pack['sub_packs'] as $subPack) {
-                $palletBuckets[$bucketKey]['prototype'] = $pack;
-                $palletBuckets[$bucketKey]['sub_packs'][] = $subPack;
-            }
+            $palletGroups[$groupKey]['packs'][] = $pack;
+            $palletGroups[$groupKey]['sub_packs'] = array_merge($palletGroups[$groupKey]['sub_packs'], $pack['sub_packs']);
         }
 
         $combinedPallets = [];
-        foreach ($palletBuckets as $bucket) {
-            if (empty($bucket['sub_packs']) || empty($bucket['prototype'])) {
+        foreach ($palletGroups as $groupKey => $group) {
+            if (empty($group['sub_packs']) || empty($group['packs'])) {
                 continue;
             }
 
-            $prototype = $bucket['prototype'];
+            // Promote to the largest footprint pallet used in this group,
+            // then stack everything to maximize single-pallet utilization by height.
+            $prototype = null;
+            $largestArea = -1;
+            foreach ($group['packs'] as $candidatePack) {
+                $candidateArea = ((int) ($candidatePack['length'] ?? 0)) * ((int) ($candidatePack['width'] ?? 0));
+                if ($candidateArea > $largestArea) {
+                    $largestArea = $candidateArea;
+                    $prototype = $candidatePack;
+                }
+            }
+            if (!$prototype) {
+                continue;
+            }
+
             $maxHeight = (int) ($prototype['max_height'] ?? $prototype['height'] ?? 0);
             if ($maxHeight <= 0) {
                 $maxHeight = 1;
@@ -883,7 +920,7 @@ class FastCourierUpdateQuotes
             $currentHeight = 0;
             $currentWeight = 0.0;
 
-            foreach ($bucket['sub_packs'] as $subPack) {
+            foreach ($group['sub_packs'] as $subPack) {
                 $subHeight = max(1, (int) ($subPack['height'] ?? 1));
                 $subWeight = (float) ($subPack['weight'] ?? 0);
 
@@ -924,6 +961,7 @@ class FastCourierUpdateQuotes
         if (count($combinedPallets) > 0) {
             Self::logPackingDebug('Combined pallet packs by height', [
                 'input_pack_count' => count($packs),
+                'group_count' => count($palletGroups),
                 'combined_pallet_count' => count($combinedPallets),
             ]);
         }
