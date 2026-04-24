@@ -131,6 +131,18 @@ class FastCourierUpdateQuotes
                 }
             }
 
+            if (empty($overridesToApply)) {
+                $derivedOverrides = Self::deriveOverridesFromCalculatorPayload($item, $wc_product, $product_id);
+                if (!empty($derivedOverrides)) {
+                    $overridesToApply = $derivedOverrides;
+                    Self::logPackingDebug('Derived cart-item overrides from calculator payload', [
+                        'product_id' => $product_id,
+                        'cart_item_key' => $cartItemKey,
+                        'derived_overrides' => $derivedOverrides,
+                    ]);
+                }
+            }
+
             if (!empty($overridesToApply)) {
                 foreach ($overridesToApply as $override_key => $override_value) {
                     $meta_dimensions[$override_key] = [strval($override_value)];
@@ -1000,5 +1012,62 @@ class FastCourierUpdateQuotes
             ];
         }
         return $data;
+    }
+
+    private static function deriveOverridesFromCalculatorPayload($cartItem, $wcProduct, $productId)
+    {
+        if (empty($cartItem['ccb_calculator']) || empty($cartItem['ccb_calculator']['calc_data']) || !is_array($cartItem['ccb_calculator']['calc_data'])) {
+            return [];
+        }
+
+        $rawMappings = get_option('wmsd_calculator_mappings', []);
+        if (empty($rawMappings) || !is_array($rawMappings)) {
+            return [];
+        }
+
+        $calculatorData = $cartItem['ccb_calculator'];
+        $calcData = $calculatorData['calc_data'];
+        $calcId = isset($calculatorData['calc_id']) ? (int) $calculatorData['calc_id'] : 0;
+        $parentProductId = method_exists($wcProduct, 'get_parent_id') ? (int) $wcProduct->get_parent_id() : 0;
+        $validProductIds = array_filter([(int) $productId, $parentProductId]);
+
+        $overrides = [];
+        foreach ($rawMappings as $mapping) {
+            $mappingCalcId = isset($mapping['calculator_id']) ? (int) $mapping['calculator_id'] : 0;
+            $mappingProductId = isset($mapping['product_id']) ? (int) $mapping['product_id'] : 0;
+            $fieldAlias = isset($mapping['field_alias']) ? (string) $mapping['field_alias'] : '';
+            $metaKey = isset($mapping['meta_key']) ? (string) $mapping['meta_key'] : '';
+
+            if (!$mappingCalcId || !$fieldAlias || !$metaKey) {
+                continue;
+            }
+
+            if ($calcId > 0 && $mappingCalcId !== $calcId) {
+                continue;
+            }
+
+            if ($mappingProductId > 0 && !in_array($mappingProductId, $validProductIds, true)) {
+                continue;
+            }
+
+            if (empty($calcData[$fieldAlias]) || !is_array($calcData[$fieldAlias]) || !array_key_exists('value', $calcData[$fieldAlias])) {
+                continue;
+            }
+
+            $value = $calcData[$fieldAlias]['value'];
+            if (is_array($value)) {
+                $value = wp_json_encode($value);
+            }
+            if (is_string($value)) {
+                $value = trim($value);
+            }
+            if ($value === '' && $value !== '0' && $value !== 0) {
+                continue;
+            }
+
+            $overrides[$metaKey] = $value;
+        }
+
+        return $overrides;
     }
 }
